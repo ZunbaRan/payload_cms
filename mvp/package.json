@@ -1,0 +1,11 @@
+{
+  "name": "payload-mvp",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter platform dev",
+    "build": "pnpm --filter platform build",
+    "migrate": "pnpm --filter platform payload migrate"
+  },
+  "packageManager": "pnpm@10.26.2"
+}

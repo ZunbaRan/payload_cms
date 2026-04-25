@@ -1,0 +1,16 @@
+{
+  "name": "@mvp/shared",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    "./ai": "./src/ai.ts",
+    "./feishu": "./src/feishu.ts",
+    "./lexical": "./src/lexical.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0"
+  }
+}
