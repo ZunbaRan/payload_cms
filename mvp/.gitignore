@@ -1,9 +1,0 @@
-node_modules
-.next
-build
-dist
-.env
-*.log
-.DS_Store
-payload.db
-payload.db-journal
