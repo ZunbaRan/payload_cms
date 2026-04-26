@@ -1,0 +1,14 @@
+{
+  "name": "payload-platform-scaffold",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Reusable Payload CMS scaffold: platform + plugin packages + MCP",
+  "scripts": {
+    "dev": "pnpm --filter platform dev",
+    "build": "pnpm --filter platform build",
+    "generate:types": "pnpm --filter platform generate:types",
+    "generate:importmap": "pnpm --filter platform generate:importmap",
+    "payload": "pnpm --filter platform payload"
+  },
+  "packageManager": "pnpm@10.26.2"
+}
