@@ -1,0 +1,27 @@
+# prod 栈：postgres + pgvector
+# 用法：
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# apps/platform/.env：
+#   DB_DRIVER=postgres
+#   DATABASE_URL=postgres://postgres:postgres@localhost:5432/geoflow
+#   VECTOR_STORE=pgvector
+#   PGVECTOR_URL=postgres://postgres:postgres@localhost:5432/geoflow
+#   PGVECTOR_DIM=768   # 与 embedding 模型维度对齐
+version: '3.9'
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: geoflow-postgres
+    restart: unless-stopped
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_DB: geoflow
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:

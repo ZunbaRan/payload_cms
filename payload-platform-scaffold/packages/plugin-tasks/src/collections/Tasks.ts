@@ -7,6 +7,13 @@ export const Tasks: CollectionConfig = {
     useAsTitle: 'name',
     group: '任务调度',
     defaultColumns: ['name', 'status', 'aiModel', 'lastRunAt', 'updatedAt'],
+    components: {
+      edit: {
+        beforeDocumentControls: [
+          '@scaffold/plugin-tasks/admin/TaskRunNowButton#default',
+        ],
+      },
+    },
   },
   access: {
     read: ({ req }) => Boolean(req.user),
@@ -68,6 +75,13 @@ export const Tasks: CollectionConfig = {
       type: 'relationship',
       relationTo: 'ai-models',
       label: 'AI 模型',
+      admin: {
+        description: '只能选择「文本生成」类型的模型；embedding/图片/视频模型不会在此出现',
+      },
+      filterOptions: () => ({
+        modelType: { equals: 'text' },
+        isActive: { equals: true },
+      }),
     },
     {
       name: 'authorMode',

@@ -1,10 +1,10 @@
 import type { TaskConfig } from 'payload'
-import { createAiClient } from '@scaffold/shared'
+import { createAiClient, getVectorStore } from '@scaffold/shared'
 
 /**
  * embedKnowledgeChunk
- * 把单个 chunk 写入 embedding 字段。
- * 上游：拆分 KnowledgeBase rawContent 后批量入队。
+ * 把单个 chunk 的内容向量化，并写入到当前生效的 VectorStore
+ * （json/chroma/pgvector 都走相同接口）。
  */
 export const embedKnowledgeChunk: TaskConfig<'embedKnowledgeChunk'> = {
   slug: 'embedKnowledgeChunk',
@@ -15,11 +15,16 @@ export const embedKnowledgeChunk: TaskConfig<'embedKnowledgeChunk'> = {
   outputSchema: [{ name: 'dim', type: 'number' }],
   handler: async ({ input, req }) => {
     const payload = req.payload
-    const chunk = await payload.findByID({
+    const chunk = (await payload.findByID({
       collection: 'knowledge-chunks',
       id: input.chunkId,
       depth: 0,
-    })
+    })) as {
+      id: string | number
+      content: string
+      knowledgeBase: unknown
+      chunkIndex?: number
+    } | null
     if (!chunk) throw new Error(`Chunk ${input.chunkId} not found`)
 
     const model = (await payload.findByID({
@@ -30,13 +35,32 @@ export const embedKnowledgeChunk: TaskConfig<'embedKnowledgeChunk'> = {
     if (!model) throw new Error(`AI model ${input.aiModelId} not found`)
 
     const ai = createAiClient(model)
-    const result = await ai.embed({ input: (chunk as { content: string }).content })
+    const result = await ai.embed({ input: chunk.content })
     const vector = result.embeddings[0] || []
+
+    const kbRef = chunk.knowledgeBase
+    const knowledgeBaseId =
+      typeof kbRef === 'object' && kbRef !== null
+        ? (kbRef as { id: string | number }).id
+        : (kbRef as string | number)
+
+    const store = await getVectorStore({ payload })
+    await store.upsert([
+      {
+        id: String(chunk.id),
+        vector,
+        payload: {
+          knowledgeBaseId,
+          chunkIndex: chunk.chunkIndex,
+          content: chunk.content,
+        },
+      },
+    ])
 
     await payload.update({
       collection: 'knowledge-chunks',
       id: input.chunkId,
-      data: { embedding: vector, tokenCount: result.totalTokens } as never,
+      data: { tokenCount: result.totalTokens } as never,
       depth: 0,
       overrideAccess: true,
     })

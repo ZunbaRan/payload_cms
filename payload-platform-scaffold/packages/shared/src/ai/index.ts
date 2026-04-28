@@ -7,6 +7,8 @@ export interface AiModelLike {
   maxTokens?: number | null
 }
 
+import { localEmbed } from './local'
+
 export interface AiCompletionRequest {
   systemPrompt?: string
   userPrompt: string
@@ -54,10 +56,12 @@ function resolveBaseUrl(model: AiModelLike): string {
 
 /**
  * 通用 OpenAI-Compatible 客户端：覆盖 OpenAI / Zhipu / ByteDance / 任意自托管端点。
- * Anthropic 与 OpenAI schema 不同，这里仅给出 chat/embeddings 走 OpenAI 风格的实现，
- * 自定义 provider 时可以替换 createAiClient。
+ * 当 provider === 'local' 时走 transformers.js 本地嵌入（零 API key，仅 embed 可用）。
  */
 export function createAiClient(model: AiModelLike): AiClient {
+  if (model.provider === 'local') {
+    return createLocalClient(model)
+  }
   const baseUrl = resolveBaseUrl(model)
   const headers: Record<string, string> = {
     'content-type': 'application/json',
@@ -134,4 +138,20 @@ export async function embed(
   req: AiEmbeddingRequest,
 ): Promise<AiEmbeddingResult> {
   return createAiClient(model).embed(req)
+}
+
+// === local provider (transformers.js) ===
+
+function createLocalClient(model: AiModelLike): AiClient {
+  return {
+    async generate() {
+      throw new Error(
+        "provider='local' 仅支持 embedding；LLM 生成请配置 LLM_BASE_URL/API_KEY/MODEL（OpenAI / DeepSeek / 通义 / ollama 等）",
+      )
+    },
+    async embed(req) {
+      const out = await localEmbed(model.modelId || 'Xenova/all-MiniLM-L6-v2', req.input)
+      return out
+    },
+  }
 }

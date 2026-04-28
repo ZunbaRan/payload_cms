@@ -10,9 +10,14 @@
     "./ai": "./src/ai/index.ts",
     "./moderation": "./src/moderation/index.ts",
     "./lexical": "./src/lexical/index.ts",
-    "./template": "./src/template.ts"
+    "./template": "./src/template.ts",
+    "./vector": "./src/vector/index.ts"
   },
   "peerDependencies": {
     "payload": "^3.0.0"
+  },
+  "dependencies": {
+    "@xenova/transformers": "^2.17.2",
+    "pg": "^8.20.0"
   }
 }

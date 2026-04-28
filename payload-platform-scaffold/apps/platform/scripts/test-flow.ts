@@ -111,6 +111,40 @@ async function main() {
   const prompt = await ensurePrompt(payload)
   const task = await ensureTask(payload, lib.id, prompt.id, ai.id)
 
+  // 6.5 文章审核联动测试：建一个 pending-review 文章 → 建 approved review → 检查文章被推到 published
+  const reviewArticle = await payload.create({
+    collection: 'articles',
+    data: {
+      title: '审核测试文章',
+      slug: 'review-test-' + Date.now(),
+      excerpt: '走一下审核联动',
+      status: 'pending-review',
+    } as never,
+    overrideAccess: true,
+  })
+  await payload.create({
+    collection: 'article-reviews',
+    data: {
+      article: reviewArticle.id,
+      decision: 'approved',
+      comment: 'looks good',
+    } as never,
+    overrideAccess: true,
+  })
+  const refreshedArticle = await payload.findByID({
+    collection: 'articles',
+    id: reviewArticle.id,
+  })
+  const ok =
+    (refreshedArticle as { status?: string }).status === 'published' &&
+    (refreshedArticle as { reviewStatus?: string }).reviewStatus === 'approved'
+  console.log(
+    '  ' + (ok ? '✓' : '✗') + ' article-review hook → status =',
+    (refreshedArticle as { status?: string }).status,
+    'reviewStatus =',
+    (refreshedArticle as { reviewStatus?: string }).reviewStatus,
+  )
+
   // 7. 入队 + 立即跑一次（不消费 token：未配 OPENAI_API_KEY 则跳过）
   if (process.env.OPENAI_API_KEY || process.env.AI_TEST_API_KEY) {
     const run = await payload.create({
@@ -140,7 +174,78 @@ async function main() {
   }
 
   console.log('\n✅ Self-test finished.')
+
+  // === 可选：vector roundtrip ===
+  // 跑法：
+  //   docker compose -f docker-compose.dev.yml up -d
+  //   docker exec -it geoflow-ollama ollama pull nomic-embed-text
+  //   RUN_VECTOR_TEST=1 VECTOR_STORE=chroma OLLAMA_BASE_URL=http://localhost:11434/v1 \
+  //     EMBED_MODEL=nomic-embed-text pnpm test:flow
+  if (process.env.RUN_VECTOR_TEST === '1') {
+    await runVectorRoundtrip(payload)
+  }
+
   process.exit(0)
+}
+
+async function runVectorRoundtrip(payload: any) {
+  console.log('\n▶︎ Vector roundtrip test (backend =', process.env.VECTOR_STORE || 'json', ')')
+  const baseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434/v1'
+  const embedModelId = process.env.EMBED_MODEL || 'nomic-embed-text'
+
+  // 1. 注册一个 embedding 模型
+  const embedModel = await payload.create({
+    collection: 'ai-models',
+    data: {
+      name: 'embed-' + embedModelId,
+      provider: 'openai',
+      modelId: embedModelId,
+      baseUrl,
+      apiKey: process.env.OLLAMA_API_KEY || 'ollama',
+      priority: 5,
+      isActive: true,
+    } as never,
+    overrideAccess: true,
+  })
+
+  // 2. 建一个 KB（hook 会自动切片 + 入队 embedKnowledgeChunk）
+  const kb = await payload.create({
+    collection: 'knowledge-bases',
+    data: {
+      name: 'Vector KB ' + Date.now(),
+      sourceType: 'manual',
+      rawContent:
+        'Payload CMS 是一个无头 CMS。它支持 PostgreSQL、SQLite 和 MongoDB。' +
+        '用户可以基于它构建强大的内容管理后台和 API。',
+      chunkSize: 500,
+      chunkOverlap: 50,
+      embeddingModel: embedModel.id,
+    } as never,
+    overrideAccess: true,
+  })
+  console.log('  ✓ KB created id =', kb.id)
+
+  // 3. 立即驱动一次 jobs queue，让 embedKnowledgeChunk 跑完
+  console.log('  ▶︎ running jobs to embed chunks...')
+  const r = await payload.jobs.run({ limit: 50 })
+  console.log('  ✓ jobs.run:', r.jobsProcessed ?? r.processed ?? JSON.stringify(r))
+
+  // 4. 通过 RAG endpoint 等价的内部调用：直接走 vector store 查询
+  const { getVectorStore, createAiClient } = await import('@scaffold/shared')
+  const ai = createAiClient(embedModel as any)
+  const q = await ai.embed({ input: 'Payload 支持哪些数据库？' })
+  const store = await getVectorStore({ payload })
+  const hits = await store.query(q.embeddings[0] || [], 3, { knowledgeBaseId: kb.id })
+  console.log('  ✓ vector backend =', store.kind, 'hits =', hits.length)
+  for (const h of hits) {
+    const preview = (h.payload.content as string | undefined)?.slice(0, 60) || ''
+    console.log(`    - [${h.score.toFixed(3)}] ${preview}...`)
+  }
+  if (hits.length === 0) {
+    throw new Error('vector roundtrip returned 0 hits')
+  }
+
+  console.log('✅ Vector roundtrip ok.')
 }
 
 async function ensureTitleLibrary(payload: any, name: string) {

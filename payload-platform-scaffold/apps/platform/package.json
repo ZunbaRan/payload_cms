@@ -11,6 +11,7 @@
     "generate:importmap": "cross-env NODE_OPTIONS=--no-deprecation payload generate:importmap",
     "payload": "cross-env NODE_OPTIONS=--no-deprecation payload",
     "test:flow": "cross-env NODE_OPTIONS=--no-deprecation node ../../node_modules/.pnpm/tsx@4.21.0/node_modules/tsx/dist/cli.mjs scripts/test-flow.ts",
+    "test:vector": "cross-env NODE_OPTIONS=--no-deprecation node ../../node_modules/.pnpm/tsx@4.21.0/node_modules/tsx/dist/cli.mjs scripts/test-vector.ts",
     "worker": "cross-env NODE_OPTIONS=--no-deprecation node ../../node_modules/.pnpm/tsx@4.21.0/node_modules/tsx/dist/cli.mjs scripts/worker.ts",
     "migrate:geoflow": "cross-env NODE_OPTIONS=--no-deprecation node ../../node_modules/.pnpm/tsx@4.21.0/node_modules/tsx/dist/cli.mjs scripts/migrate-geoflow.ts"
   },
@@ -34,6 +35,7 @@
     "graphql": "^16.8.1",
     "next": "16.2.3",
     "payload": "3.84.1",
+    "pg": "^8.20.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "sharp": "0.34.2"

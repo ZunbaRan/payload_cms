@@ -9,6 +9,16 @@ export type {
   AiEmbeddingResult,
   AiModelLike,
 } from './ai'
-export { createAiClient, embed, generateText } from './ai'
+export { createAiClient } from './ai'
 export { htmlToLexical, plainTextToLexical } from './lexical'
 export { matchSensitiveWords, type SensitiveMatch, type SensitiveWordLike } from './moderation'
+export {
+  createVectorStore,
+  getVectorStore,
+  _resetVectorStoreCache,
+  type VectorRecord,
+  type VectorStore,
+  type VectorStoreKind,
+  type VectorQueryFilter,
+  type VectorQueryHit,
+} from './vector'

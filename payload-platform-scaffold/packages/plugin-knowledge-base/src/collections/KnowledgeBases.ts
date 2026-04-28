@@ -1,4 +1,5 @@
 import type { CollectionConfig } from 'payload'
+import { ragSearchEndpoint } from '../endpoints/ragSearch'
 import { knowledgeBaseChunkHook } from '../hooks/knowledgeBaseChunk'
 
 export const KnowledgeBases: CollectionConfig = {
@@ -14,6 +15,7 @@ export const KnowledgeBases: CollectionConfig = {
     update: ({ req }) => Boolean(req.user),
     delete: ({ req }) => Boolean(req.user),
   },
+  endpoints: [ragSearchEndpoint],
   hooks: {
     afterChange: [knowledgeBaseChunkHook],
   },
@@ -50,7 +52,11 @@ export const KnowledgeBases: CollectionConfig = {
       type: 'relationship',
       relationTo: 'ai-models',
       label: 'Embedding 模型',
-      admin: { description: '指向一个 ai-models 条目（建议是 embedding 类型）' },
+      admin: { description: '只能选择 embedding 类型的模型' },
+      filterOptions: () => ({
+        modelType: { equals: 'embedding' },
+        isActive: { equals: true },
+      }),
     },
     {
       name: 'syncStatus',

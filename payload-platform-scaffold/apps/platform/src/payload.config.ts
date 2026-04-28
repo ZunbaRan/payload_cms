@@ -13,11 +13,41 @@ import path from 'path'
 import { buildConfig } from 'payload'
 import sharp from 'sharp'
 import { fileURLToPath } from 'url'
+import { createRequire } from 'module'
 
 import { Users } from './collections/Users'
+import { seedDefaultAiModels } from './seed'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
+const requireCjs = createRequire(import.meta.url)
+
+/**
+ * 数据库驱动切换：
+ *   DB_DRIVER=sqlite    （默认，dev）
+ *   DB_DRIVER=postgres  （prod，需要 @payloadcms/db-postgres + DATABASE_URL）
+ */
+function buildDb(): any {
+  const driver = (process.env.DB_DRIVER || 'sqlite').toLowerCase()
+  if (driver === 'postgres' || driver === 'pg') {
+    // 用变量名拼接，避免 Turbopack/Next 在 dev 模式静态解析这个可选依赖。
+    // 仅在 DB_DRIVER=postgres 时才需要安装 @payloadcms/db-postgres。
+    const pkg = ['@payloadcms', 'db-postgres'].join('/')
+    const mod = requireCjs(pkg) as {
+      postgresAdapter: (cfg: { pool: { connectionString: string } }) => any
+    }
+    return mod.postgresAdapter({
+      pool: {
+        connectionString:
+          process.env.DATABASE_URL ||
+          'postgres://postgres:postgres@localhost:5432/geoflow',
+      },
+    })
+  }
+  return sqliteAdapter({
+    client: { url: process.env.DATABASE_URL || 'file:./data.db' },
+  })
+}
 
 export default buildConfig({
   admin: {
@@ -80,7 +110,7 @@ export default buildConfig({
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || 'dev-secret',
   typescript: { outputFile: path.resolve(dirname, 'payload-types.ts') },
-  db: sqliteAdapter({ client: { url: process.env.DATABASE_URL || 'file:./data.db' } }),
+  db: buildDb(),
   jobs: {
     // 开发模式自动 tick 一次队列；生产请用独立 worker 进程
     autoRun: [
@@ -91,6 +121,9 @@ export default buildConfig({
       },
     ],
     shouldAutoRun: () => process.env.JOBS_AUTORUN !== 'false',
+  },
+  onInit: async (payload: any) => {
+    await seedDefaultAiModels(payload)
   },
   sharp,
 })

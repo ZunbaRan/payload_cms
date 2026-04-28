@@ -1,4 +1,5 @@
 import type { CollectionConfig } from 'payload'
+import { articleReviewSyncHook } from '../hooks/articleReviewSync'
 
 export const ArticleReviews: CollectionConfig = {
   slug: 'article-reviews',
@@ -12,6 +13,9 @@ export const ArticleReviews: CollectionConfig = {
     create: ({ req }) => Boolean(req.user),
     update: ({ req }) => Boolean(req.user),
     delete: ({ req }) => Boolean(req.user),
+  },
+  hooks: {
+    afterChange: [articleReviewSyncHook],
   },
   fields: [
     {

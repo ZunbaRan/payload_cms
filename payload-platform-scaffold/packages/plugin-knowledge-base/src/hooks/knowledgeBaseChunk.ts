@@ -1,4 +1,5 @@
 import type { CollectionAfterChangeHook } from 'payload'
+import { getVectorStore } from '@scaffold/shared'
 
 /**
  * KnowledgeBase.afterChange:
@@ -48,6 +49,14 @@ export const knowledgeBaseChunkHook: CollectionAfterChangeHook = async ({
       }),
     ),
   )
+
+  // 同步清理外部向量库（chroma/pgvector）
+  try {
+    const store = await getVectorStore({ payload })
+    await store.deleteByKnowledgeBase(id)
+  } catch (e) {
+    req.payload.logger?.warn?.(`vector delete failed: ${(e as Error).message}`)
+  }
 
   if (!rawContent.trim()) {
     await payload.update({
