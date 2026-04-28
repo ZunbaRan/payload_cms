@@ -42,6 +42,28 @@ export const AgentTaskRuns: CollectionConfig = {
     { name: 'finishedAt', type: 'date', admin: { readOnly: true } },
     { name: 'durationMs', type: 'number', admin: { readOnly: true } },
     {
+      name: 'inputs',
+      type: 'json',
+      label: '运行时输入',
+      admin: { readOnly: true, description: '本次执行注入到 prompt 中的 {{key}} 变量值' },
+    },
+    {
+      name: 'effectivePrompt',
+      type: 'textarea',
+      label: '实际执行的 prompt（变量已替换）',
+      admin: { readOnly: true, rows: 6 },
+    },
+    {
+      name: 'linkedKnowledgeBase',
+      type: 'relationship',
+      relationTo: 'knowledge-bases',
+      label: '关联知识库',
+      admin: {
+        readOnly: true,
+        description: '若设置，则成功后自动把 finalOutput（绝对路径）的内容回写到 KB.rawContent',
+      },
+    },
+    {
       name: 'finalOutput',
       type: 'textarea',
       label: '最终输出',

@@ -1,0 +1,1 @@
+This is uploaded file content. It will become a knowledge base via the file upload path. We chunk and embed it locally.

@@ -1,3 +1,4 @@
+import { default as default_acb93548321a83a93131f92ef083e5b6 } from '@scaffold/plugin-knowledge-base/admin/KnowledgeBaseActions'
 import { default as default_e43b2c0a8be7ed55ec599bbb08be42ed } from '@scaffold/plugin-ai-engine/admin/AiModelTestButton'
 import { RscEntryLexicalCell as RscEntryLexicalCell_44fe37237e0ebf4470c9990d8cb7b07e } from '@payloadcms/richtext-lexical/rsc'
 import { RscEntryLexicalField as RscEntryLexicalField_44fe37237e0ebf4470c9990d8cb7b07e } from '@payloadcms/richtext-lexical/rsc'
@@ -28,6 +29,7 @@ import { CollectionCards as CollectionCards_f9c02e79a4aed9a3924487c0cd4cafb1 } f
 
 /** @type import('payload').ImportMap */
 export const importMap = {
+  "@scaffold/plugin-knowledge-base/admin/KnowledgeBaseActions#default": default_acb93548321a83a93131f92ef083e5b6,
   "@scaffold/plugin-ai-engine/admin/AiModelTestButton#default": default_e43b2c0a8be7ed55ec599bbb08be42ed,
   "@payloadcms/richtext-lexical/rsc#RscEntryLexicalCell": RscEntryLexicalCell_44fe37237e0ebf4470c9990d8cb7b07e,
   "@payloadcms/richtext-lexical/rsc#RscEntryLexicalField": RscEntryLexicalField_44fe37237e0ebf4470c9990d8cb7b07e,

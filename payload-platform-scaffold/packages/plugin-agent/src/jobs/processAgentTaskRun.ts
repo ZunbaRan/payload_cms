@@ -18,8 +18,63 @@ import type { TaskConfig } from 'payload'
 import fs from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
+import { exec } from 'node:child_process'
 import { getSkillDir } from '../lib/skillStorage'
 import { buildLanguageModel } from '../lib/buildModel'
+
+// TODO(remote-sandbox): 当前直接调用宿主机 bash（无隔离），仅用于本地开发测试。
+// 未来要拆出独立的 agent runner 服务（例如 fly.io / vercel sandbox / 自建 Firecracker 集群）。
+// 平台侧只需把 { prompt, skills(folder tar), variables, model } POST 到远程 endpoint，
+// 远程执行完成后回传 { mode: 'text' | 'file', payload } 两种结果。
+// 切换时，把下面的 hostBashSandbox 实现替换成 HTTP 客户端调用即可，processAgentTaskRun 主流程不变。
+
+interface SandboxResult {
+  stdout: string
+  stderr: string
+  exitCode: number
+}
+
+/**
+ * 宿主机 bash 执行（不隔离，仅本地调试用）。
+ * cwd 指向 runRoot，因此 agent 既能 `./skills/<slug>/` 访问技能，也能 `./workspace/output.md` 写产物。
+ */
+function createHostBashSandbox(runRoot: string, timeoutMs: number) {
+  return {
+    async executeCommand(command: string): Promise<SandboxResult> {
+      return await new Promise<SandboxResult>((resolve) => {
+        exec(
+          command,
+          {
+            cwd: runRoot,
+            timeout: timeoutMs,
+            maxBuffer: 10 * 1024 * 1024,
+            shell: '/bin/bash',
+            env: { ...process.env },
+          },
+          (err, stdout, stderr) => {
+            const code = err ? ((err as NodeJS.ErrnoException).code as unknown as number) ?? 1 : 0
+            resolve({
+              stdout: typeof stdout === 'string' ? stdout : stdout.toString('utf-8'),
+              stderr: typeof stderr === 'string' ? stderr : stderr.toString('utf-8'),
+              exitCode: typeof code === 'number' ? code : 1,
+            })
+          },
+        )
+      })
+    },
+    async readFile(p: string): Promise<string> {
+      const abs = path.isAbsolute(p) ? p : path.join(runRoot, p)
+      return await fs.readFile(abs, 'utf-8')
+    },
+    async writeFiles(files: Array<{ path: string; content: string | Buffer }>): Promise<void> {
+      for (const f of files) {
+        const abs = path.isAbsolute(f.path) ? f.path : path.join(runRoot, f.path)
+        await fs.mkdir(path.dirname(abs), { recursive: true })
+        await fs.writeFile(abs, f.content)
+      }
+    },
+  }
+}
 
 interface AgentTaskDoc {
   id: string | number
@@ -30,6 +85,21 @@ interface AgentTaskDoc {
   timeoutMs?: number
   enableBash?: boolean
   totalRuns?: number
+  variables?: Array<{ key?: string; defaultValue?: string }>
+  outputMode?: 'text' | 'file'
+}
+
+interface AgentTaskRunDoc {
+  id: string | number
+  inputs?: Record<string, string>
+  linkedKnowledgeBase?: string | number | { id: string | number }
+}
+
+function applyTemplate(prompt: string, vars: Record<string, string>): string {
+  return prompt.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_, k) => {
+    const v = vars[k]
+    return v == null ? `{{${k}}}` : String(v)
+  })
 }
 
 async function copyDir(src: string, dest: string): Promise<void> {
@@ -48,6 +118,7 @@ export const processAgentTaskRun: TaskConfig<'processAgentTaskRun'> = {
   inputSchema: [
     { name: 'agentTaskId', type: 'text', required: true },
     { name: 'agentTaskRunId', type: 'text', required: true },
+    { name: 'kbIndexRunId', type: 'text' },
   ],
   outputSchema: [
     { name: 'finalOutput', type: 'text' },
@@ -85,6 +156,28 @@ export const processAgentTaskRun: TaskConfig<'processAgentTaskRun'> = {
     if (!task.aiModel?.provider || !task.aiModel?.modelId) {
       throw new Error('agent-task 缺少 aiModel')
     }
+
+    // 读取 run 的 inputs 和 linkedKnowledgeBase
+    const taskRun = (await payload.findByID({
+      collection: 'agent-task-runs',
+      id: input.agentTaskRunId,
+      depth: 0,
+    })) as unknown as AgentTaskRunDoc | null
+    const runInputs = taskRun?.inputs || {}
+    const linkedKbId = taskRun?.linkedKnowledgeBase
+      ? typeof taskRun.linkedKnowledgeBase === 'object'
+        ? (taskRun.linkedKnowledgeBase as { id: string | number }).id
+        : taskRun.linkedKnowledgeBase
+      : undefined
+
+    // 应用变量默认值 + 运行时 inputs 覆盖
+    const mergedVars: Record<string, string> = {}
+    for (const v of task.variables || []) {
+      if (v?.key) mergedVars[v.key] = v.defaultValue || ''
+    }
+    Object.assign(mergedVars, runInputs)
+
+    const effectivePrompt = applyTemplate(task.prompt, mergedVars)
 
     // 1. 准备运行目录
     const runRoot = path.resolve(
@@ -139,15 +232,31 @@ export const processAgentTaskRun: TaskConfig<'processAgentTaskRun'> = {
       // bash tool（可选）
       let extraInstructions = ''
       if (task.enableBash) {
+        const hostSandbox = createHostBashSandbox(runRoot, task.timeoutMs || 300000)
         const { tools, instructions } = await bashTool.createBashTool({
-          // 不传 sandbox → 默认 just-bash，cwd=workspace
-          destination: path.join(runRoot, 'workspace'),
+          // 用宿主机 bash 沙箱，cwd=runRoot（这样 ./skills/ 和 ./workspace/ 都能直接访问）
+          // TODO(remote-sandbox): 上线前替换成远程 sandbox endpoint
+          sandbox: hostSandbox,
+          destination: runRoot,
         } as never)
         Object.assign(toolsOut, tools)
         extraInstructions = instructions || ''
       }
 
       const stopWhen = aiSdk.stepCountIs(task.maxSteps || 20)
+
+      const wantsFile = task.outputMode === 'file' || Boolean(linkedKbId)
+      const outputFilePath = path.join(runRoot, 'workspace', 'output.md')
+      const fileOutputInstructions = wantsFile
+        ? [
+            '——',
+            '【输出协议（重要）】',
+            `bash 当前工作目录(cwd)是: ${runRoot}`,
+            `请把最终结果（markdown 格式纯文本）写入文件：${outputFilePath}`,
+            '可以直接用 `cat > ./workspace/output.md << \'EOF\' ... EOF` 或 writeFile 工具写入。',
+            '完成后，最终回复**只**返回这个绝对路径，单行纯文本，不要返回内容、不要加引号、不要解释、不要 markdown 代码块。',
+          ].join('\n')
+        : ''
 
       const systemPrompt =
         [
@@ -157,6 +266,7 @@ export const processAgentTaskRun: TaskConfig<'processAgentTaskRun'> = {
             ? `You have access to the following skills (located under ./skills/): ${skillNames.join(', ')}.`
             : '',
           extraInstructions,
+          fileOutputInstructions,
         ]
           .filter(Boolean)
           .join('\n\n')
@@ -178,7 +288,7 @@ export const processAgentTaskRun: TaskConfig<'processAgentTaskRun'> = {
         })
         // 超时控制
         resultUnknown = await Promise.race([
-          agent.generate({ prompt: task.prompt }),
+          agent.generate({ prompt: effectivePrompt }),
           new Promise((_, rej) =>
             setTimeout(() => rej(new Error('agent execution timed out')), task.timeoutMs || 300000),
           ),
@@ -193,7 +303,7 @@ export const processAgentTaskRun: TaskConfig<'processAgentTaskRun'> = {
             model,
             tools: toolsOut,
             system: systemPrompt,
-            prompt: task.prompt,
+            prompt: effectivePrompt,
             stopWhen,
           }),
           new Promise((_, rej) =>
@@ -242,6 +352,7 @@ export const processAgentTaskRun: TaskConfig<'processAgentTaskRun'> = {
           finishedAt: finishedAt.toISOString(),
           durationMs: finishedAt.getTime() - startedAt.getTime(),
           errorMessage: err.message || String(e),
+          effectivePrompt,
           steps,
           stepCount,
         } as never,
@@ -259,10 +370,122 @@ export const processAgentTaskRun: TaskConfig<'processAgentTaskRun'> = {
         depth: 0,
         overrideAccess: true,
       })
+      // 同步失败到 kb-index-runs
+      if (input.kbIndexRunId) {
+        try {
+          await payload.update({
+            collection: 'kb-index-runs',
+            id: input.kbIndexRunId,
+            data: {
+              status: 'failed',
+              finishedAt: finishedAt.toISOString(),
+              durationMs: finishedAt.getTime() - startedAt.getTime(),
+              message: `agent 抓取失败：${err.message || String(e)}`,
+            } as never,
+            depth: 0,
+            overrideAccess: true,
+          })
+          if (linkedKbId) {
+            await payload.update({
+              collection: 'knowledge-bases',
+              id: linkedKbId,
+              data: { syncStatus: 'failed' } as never,
+              depth: 0,
+              overrideAccess: true,
+              context: { skipChunk: true },
+            })
+          }
+        } catch (e2) {
+          payload.logger?.warn?.(`update kb-index-run failed: ${(e2 as Error).message}`)
+        }
+      }
       throw e
     }
 
     const finishedAt = new Date()
+
+    // 如果绑定了 KB → 把 finalOutput 当作绝对路径，读文件回写 KB.rawContent
+    let kbWriteMessage: string | undefined
+    if (linkedKbId) {
+      try {
+        // 解析 agent 返回的路径：取最后一行非空文本，去掉常见包裹（反引号/引号/markdown 代码块）
+        const lines = (finalOutput || '')
+          .split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l && !l.startsWith('```'))
+        let candidate = lines[lines.length - 1] || ''
+        candidate = candidate.replace(/^[`'"]+|[`'"]+$/g, '').trim()
+        if (!candidate) throw new Error(`agent 没有返回任何路径，finalOutput=${JSON.stringify(finalOutput)}`)
+        // 相对路径按 runRoot 解析
+        const abs = path.isAbsolute(candidate) ? path.resolve(candidate) : path.resolve(runRoot, candidate)
+        // 安全：限制必须在 .geoflow-data/agent-runs 目录树内
+        const allowedRoot = path.resolve(process.cwd(), '.geoflow-data')
+        if (!abs.startsWith(allowedRoot)) {
+          throw new Error(`agent 返回的路径不在允许目录内：${abs}（解析前: ${candidate}）`)
+        }
+        if (!existsSync(abs)) throw new Error(`agent 返回的文件不存在：${abs}（解析前: ${candidate}）`)
+        const content = await fs.readFile(abs, 'utf-8')
+        await payload.update({
+          collection: 'knowledge-bases',
+          id: linkedKbId,
+          data: { rawContent: content, syncStatus: 'pending' } as never,
+          depth: 0,
+          overrideAccess: true,
+          // 走 hook 也行，但这里直接 skip 防止重复 update
+          context: { skipChunk: true },
+        })
+        kbWriteMessage = `已写入 KB.rawContent（${content.length} 字符），可点「📚 开始索引」继续`
+      } catch (e) {
+        kbWriteMessage = `KB 回写失败：${(e as Error).message}`
+        payload.logger?.warn?.(kbWriteMessage)
+        if (input.kbIndexRunId) {
+          await payload.update({
+            collection: 'kb-index-runs',
+            id: input.kbIndexRunId,
+            data: {
+              status: 'failed',
+              finishedAt: finishedAt.toISOString(),
+              durationMs: finishedAt.getTime() - startedAt.getTime(),
+              message: kbWriteMessage,
+            } as never,
+            depth: 0,
+            overrideAccess: true,
+          })
+        }
+        await payload.update({
+          collection: 'agent-task-runs',
+          id: input.agentTaskRunId,
+          data: {
+            status: 'failed',
+            errorMessage: kbWriteMessage,
+            finishedAt: finishedAt.toISOString(),
+            durationMs: finishedAt.getTime() - startedAt.getTime(),
+            finalOutput,
+            effectivePrompt,
+            steps,
+            stepCount,
+            promptTokens,
+            completionTokens,
+            totalTokens,
+          } as never,
+          depth: 0,
+          overrideAccess: true,
+        })
+        await payload.update({
+          collection: 'agent-tasks',
+          id: input.agentTaskId,
+          data: {
+            lastRunAt: finishedAt.toISOString(),
+            lastRunStatus: 'failed',
+            totalRuns: ((task.totalRuns as number) || 0) + 1,
+          } as never,
+          depth: 0,
+          overrideAccess: true,
+        })
+        throw new Error(kbWriteMessage)
+      }
+    }
+
     await payload.update({
       collection: 'agent-task-runs',
       id: input.agentTaskRunId,
@@ -271,6 +494,7 @@ export const processAgentTaskRun: TaskConfig<'processAgentTaskRun'> = {
         finishedAt: finishedAt.toISOString(),
         durationMs: finishedAt.getTime() - startedAt.getTime(),
         finalOutput,
+        effectivePrompt,
         steps,
         stepCount,
         promptTokens,
@@ -291,6 +515,28 @@ export const processAgentTaskRun: TaskConfig<'processAgentTaskRun'> = {
       depth: 0,
       overrideAccess: true,
     })
+
+    // 同步成功到 kb-index-runs（kind=fetch 场景）
+    if (input.kbIndexRunId) {
+      try {
+        await payload.update({
+          collection: 'kb-index-runs',
+          id: input.kbIndexRunId,
+          data: {
+            status: 'success',
+            phase: 'done',
+            progress: 100,
+            finishedAt: finishedAt.toISOString(),
+            durationMs: finishedAt.getTime() - startedAt.getTime(),
+            message: kbWriteMessage || '抓取成功',
+          } as never,
+          depth: 0,
+          overrideAccess: true,
+        })
+      } catch (e) {
+        payload.logger?.warn?.(`update kb-index-run success failed: ${(e as Error).message}`)
+      }
+    }
 
     return {
       output: {

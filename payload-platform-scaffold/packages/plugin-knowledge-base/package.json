@@ -4,7 +4,19 @@
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts",
+    "./admin/KnowledgeBaseActions": "./src/admin/KnowledgeBaseActions.tsx"
+  },
   "dependencies": { "@scaffold/shared": "workspace:*" },
-  "peerDependencies": { "payload": "^3.0.0" }
+  "devDependencies": {
+    "@payloadcms/ui": "^3.0.0",
+    "react": "^19.0.0",
+    "payload": "^3.0.0"
+  },
+  "peerDependencies": {
+    "payload": "^3.0.0",
+    "react": "^19.0.0",
+    "@payloadcms/ui": "^3.0.0"
+  }
 }

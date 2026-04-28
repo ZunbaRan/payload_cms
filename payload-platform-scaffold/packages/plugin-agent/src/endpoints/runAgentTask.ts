@@ -19,9 +19,21 @@ export const runAgentTaskEndpoint: Endpoint = {
     })
     if (!task) return Response.json({ error: 'Agent task not found' }, { status: 404 })
 
+    let inputs: Record<string, string> | undefined
+    try {
+      const body = (await req.json?.()) as { inputs?: Record<string, string> } | undefined
+      inputs = body?.inputs
+    } catch {
+      // no body
+    }
+
     const taskRun = await req.payload.create({
       collection: 'agent-task-runs',
-      data: { agentTask: id, status: 'queued' } as never,
+      data: {
+        agentTask: id,
+        status: 'queued',
+        ...(inputs ? { inputs } : {}),
+      } as never,
       depth: 0,
       overrideAccess: true,
     })

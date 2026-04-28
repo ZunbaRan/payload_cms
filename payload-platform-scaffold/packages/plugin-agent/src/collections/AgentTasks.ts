@@ -41,8 +41,37 @@ export const AgentTasks: CollectionConfig = {
       label: '任务提示词',
       admin: {
         description:
-          '直接告诉 agent 要做什么；agent 会根据提示词自主决定调用哪些 skill 和 bash 命令',
+          '直接告诉 agent 要做什么；agent 会根据提示词自主决定调用哪些 skill 和 bash 命令。可使用 {{key}} 占位符引用下方"输入变量"，运行时由调用方传入实际值。',
         rows: 8,
+      },
+    },
+    {
+      name: 'variables',
+      type: 'array',
+      label: '输入变量（prompt 模板）',
+      admin: {
+        description:
+          '声明 prompt 中用到的占位符。例如声明 key=url，prompt 里写 {{url}}，调用 /run 时传 inputs:{url:"https://..."}。',
+      },
+      fields: [
+        { name: 'key', type: 'text', required: true, label: '变量名' },
+        { name: 'label', type: 'text', label: '显示名' },
+        { name: 'defaultValue', type: 'text', label: '默认值' },
+        { name: 'description', type: 'textarea', label: '说明' },
+      ],
+    },
+    {
+      name: 'outputMode',
+      type: 'select',
+      defaultValue: 'text',
+      label: '输出模式',
+      options: [
+        { label: '直接文本（finalOutput=agent 文字答案）', value: 'text' },
+        { label: '文件路径（finalOutput=绝对路径，调用方自行读取）', value: 'file' },
+      ],
+      admin: {
+        description:
+          '当被 KB「用 Agent 抓取」调用时，会强制按 file 模式：要求 agent 把抓到的内容写到 ./workspace/output.md 并返回绝对路径',
       },
     },
     {
