@@ -25,9 +25,30 @@ importers:
       '@payloadcms/ui':
         specifier: 3.84.1
         version: 3.84.1(@types/react@19.2.14)(monaco-editor@0.55.1)(next@16.2.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.77.4))(payload@3.84.1(graphql@16.13.2)(typescript@5.7.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.7.3)
-      '@scaffold/plugin-example':
+      '@scaffold/plugin-ai-engine':
         specifier: workspace:*
-        version: link:../../packages/plugin-example
+        version: link:../../packages/plugin-ai-engine
+      '@scaffold/plugin-content':
+        specifier: workspace:*
+        version: link:../../packages/plugin-content
+      '@scaffold/plugin-knowledge-base':
+        specifier: workspace:*
+        version: link:../../packages/plugin-knowledge-base
+      '@scaffold/plugin-materials':
+        specifier: workspace:*
+        version: link:../../packages/plugin-materials
+      '@scaffold/plugin-moderation':
+        specifier: workspace:*
+        version: link:../../packages/plugin-moderation
+      '@scaffold/plugin-site-settings':
+        specifier: workspace:*
+        version: link:../../packages/plugin-site-settings
+      '@scaffold/plugin-tasks':
+        specifier: workspace:*
+        version: link:../../packages/plugin-tasks
+      '@scaffold/plugin-url-import':
+        specifier: workspace:*
+        version: link:../../packages/plugin-url-import
       '@scaffold/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -69,7 +90,16 @@ importers:
         specifier: 5.7.3
         version: 5.7.3
 
-  packages/plugin-coding-pipeline:
+  packages/plugin-ai-engine:
+    dependencies:
+      '@scaffold/shared':
+        specifier: workspace:*
+        version: link:../shared
+      payload:
+        specifier: ^3.0.0
+        version: 3.84.1(graphql@16.13.2)(typescript@5.7.3)
+
+  packages/plugin-content:
     dependencies:
       '@scaffold/shared':
         specifier: workspace:*
@@ -79,6 +109,60 @@ importers:
         version: 3.84.1(graphql@16.13.2)(typescript@5.7.3)
 
   packages/plugin-example:
+    dependencies:
+      '@scaffold/shared':
+        specifier: workspace:*
+        version: link:../shared
+      payload:
+        specifier: ^3.0.0
+        version: 3.84.1(graphql@16.13.2)(typescript@5.7.3)
+
+  packages/plugin-knowledge-base:
+    dependencies:
+      '@scaffold/shared':
+        specifier: workspace:*
+        version: link:../shared
+      payload:
+        specifier: ^3.0.0
+        version: 3.84.1(graphql@16.13.2)(typescript@5.7.3)
+
+  packages/plugin-materials:
+    dependencies:
+      '@scaffold/shared':
+        specifier: workspace:*
+        version: link:../shared
+      payload:
+        specifier: ^3.0.0
+        version: 3.84.1(graphql@16.13.2)(typescript@5.7.3)
+
+  packages/plugin-moderation:
+    dependencies:
+      '@scaffold/shared':
+        specifier: workspace:*
+        version: link:../shared
+      payload:
+        specifier: ^3.0.0
+        version: 3.84.1(graphql@16.13.2)(typescript@5.7.3)
+
+  packages/plugin-site-settings:
+    dependencies:
+      '@scaffold/shared':
+        specifier: workspace:*
+        version: link:../shared
+      payload:
+        specifier: ^3.0.0
+        version: 3.84.1(graphql@16.13.2)(typescript@5.7.3)
+
+  packages/plugin-tasks:
+    dependencies:
+      '@scaffold/shared':
+        specifier: workspace:*
+        version: link:../shared
+      payload:
+        specifier: ^3.0.0
+        version: 3.84.1(graphql@16.13.2)(typescript@5.7.3)
+
+  packages/plugin-url-import:
     dependencies:
       '@scaffold/shared':
         specifier: workspace:*

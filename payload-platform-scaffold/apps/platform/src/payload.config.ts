@@ -1,7 +1,14 @@
 import { sqliteAdapter } from '@payloadcms/db-sqlite'
 import { mcpPlugin } from '@payloadcms/plugin-mcp'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
-import { examplePlugin } from '@scaffold/plugin-example'
+import { aiEnginePlugin } from '@scaffold/plugin-ai-engine'
+import { contentPlugin } from '@scaffold/plugin-content'
+import { knowledgeBasePlugin } from '@scaffold/plugin-knowledge-base'
+import { materialsPlugin } from '@scaffold/plugin-materials'
+import { moderationPlugin } from '@scaffold/plugin-moderation'
+import { siteSettingsPlugin } from '@scaffold/plugin-site-settings'
+import { tasksPlugin } from '@scaffold/plugin-tasks'
+import { urlImportPlugin } from '@scaffold/plugin-url-import'
 import path from 'path'
 import { buildConfig } from 'payload'
 import sharp from 'sharp'
@@ -16,26 +23,56 @@ export default buildConfig({
   admin: {
     user: Users.slug,
     importMap: { baseDir: path.resolve(dirname) },
-    meta: { titleSuffix: ' — Payload Platform' },
+    meta: { titleSuffix: ' — GEOFlow on Payload' },
   },
   collections: [Users],
   plugins: [
-    examplePlugin(),
+    // 业务插件按依赖顺序加载
+    materialsPlugin(),
+    knowledgeBasePlugin(),
+    aiEnginePlugin(),
+    contentPlugin(),
+    tasksPlugin(),
+    moderationPlugin(),
+    urlImportPlugin(),
+    siteSettingsPlugin(),
+    // MCP 暴露给 AI Agent 的能力（只暴露读 + 关键写，删除一律拒绝）
     mcpPlugin({
       collections: {
-        examples: {
+        articles: {
           enabled: { find: true, create: true, update: true, delete: false },
-          description: 'Example business records used by the scaffold template.',
+          description: 'GEO 文章主体：标题、正文、状态、SEO 元数据。',
+        },
+        tasks: {
+          enabled: { find: true, create: true, update: true, delete: false },
+          description: '内容生成任务编排：库选择、模型、Prompt、节奏。',
+        },
+        prompts: {
+          enabled: { find: true, create: true, update: true, delete: false },
+          description: 'Prompt 模板库；AI Agent 可读取已有模板辅助生成。',
+        },
+        'knowledge-bases': {
+          enabled: { find: true, create: false, update: false, delete: false },
+          description: 'RAG 知识库元信息（只读，避免 Agent 误删）。',
+        },
+        titles: {
+          enabled: { find: true, create: true, update: true, delete: false },
+        },
+        keywords: {
+          enabled: { find: true, create: true, update: true, delete: false },
+        },
+        categories: {
+          enabled: { find: true, create: false, update: false, delete: false },
         },
       },
       mcp: {
         serverOptions: {
           serverInfo: {
-            name: 'Payload Platform MCP Server',
+            name: 'GEOFlow Payload MCP Server',
             version: '0.0.1',
           },
           instructions:
-            'Use Payload MCP tools conservatively. Prefer read-only operations unless the user explicitly asks to create or update records.',
+            'GEOFlow 是 GEO 内容工程平台。优先读取 articles / tasks / prompts；写入需谨慎，删除一律拒绝。',
         },
       },
     }),
