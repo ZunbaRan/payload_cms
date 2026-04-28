@@ -9,7 +9,10 @@
     "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
     "generate:types": "cross-env NODE_OPTIONS=--no-deprecation payload generate:types",
     "generate:importmap": "cross-env NODE_OPTIONS=--no-deprecation payload generate:importmap",
-    "payload": "cross-env NODE_OPTIONS=--no-deprecation payload"
+    "payload": "cross-env NODE_OPTIONS=--no-deprecation payload",
+    "test:flow": "cross-env NODE_OPTIONS=--no-deprecation node ../../node_modules/.pnpm/tsx@4.21.0/node_modules/tsx/dist/cli.mjs scripts/test-flow.ts",
+    "worker": "cross-env NODE_OPTIONS=--no-deprecation node ../../node_modules/.pnpm/tsx@4.21.0/node_modules/tsx/dist/cli.mjs scripts/worker.ts",
+    "migrate:geoflow": "cross-env NODE_OPTIONS=--no-deprecation node ../../node_modules/.pnpm/tsx@4.21.0/node_modules/tsx/dist/cli.mjs scripts/migrate-geoflow.ts"
   },
   "dependencies": {
     "@payloadcms/db-sqlite": "3.84.1",

@@ -1,4 +1,5 @@
 import type { CollectionConfig } from 'payload'
+import { knowledgeBaseChunkHook } from '../hooks/knowledgeBaseChunk'
 
 export const KnowledgeBases: CollectionConfig = {
   slug: 'knowledge-bases',
@@ -12,6 +13,9 @@ export const KnowledgeBases: CollectionConfig = {
     create: ({ req }) => Boolean(req.user),
     update: ({ req }) => Boolean(req.user),
     delete: ({ req }) => Boolean(req.user),
+  },
+  hooks: {
+    afterChange: [knowledgeBaseChunkHook],
   },
   fields: [
     { name: 'name', type: 'text', required: true, label: '名称' },
@@ -43,9 +47,10 @@ export const KnowledgeBases: CollectionConfig = {
     },
     {
       name: 'embeddingModel',
-      type: 'text',
+      type: 'relationship',
+      relationTo: 'ai-models',
       label: 'Embedding 模型',
-      admin: { description: '例如 text-embedding-3-small' },
+      admin: { description: '指向一个 ai-models 条目（建议是 embedding 类型）' },
     },
     {
       name: 'syncStatus',

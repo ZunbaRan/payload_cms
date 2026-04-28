@@ -1,4 +1,11 @@
 import type { CollectionConfig } from 'payload'
+import { makeCountSyncHooks } from '../hooks/countSync'
+
+const countHooks = makeCountSyncHooks({
+  parentCollection: 'keyword-libraries',
+  parentField: 'keywordCount',
+  childForeignKey: 'library',
+})
 
 export const Keywords: CollectionConfig = {
   slug: 'keywords',
@@ -12,6 +19,10 @@ export const Keywords: CollectionConfig = {
     create: ({ req }) => Boolean(req.user),
     update: ({ req }) => Boolean(req.user),
     delete: ({ req }) => Boolean(req.user),
+  },
+  hooks: {
+    afterChange: [countHooks.afterChange],
+    afterDelete: [countHooks.afterDelete],
   },
   fields: [
     { name: 'text', type: 'text', required: true, label: '关键词' },

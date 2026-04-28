@@ -6,7 +6,11 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./env": "./src/env.ts"
+    "./env": "./src/env.ts",
+    "./ai": "./src/ai/index.ts",
+    "./moderation": "./src/moderation/index.ts",
+    "./lexical": "./src/lexical/index.ts",
+    "./template": "./src/template.ts"
   },
   "peerDependencies": {
     "payload": "^3.0.0"

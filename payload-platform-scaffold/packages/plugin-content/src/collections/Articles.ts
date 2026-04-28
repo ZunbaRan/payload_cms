@@ -1,4 +1,5 @@
 import type { CollectionConfig } from 'payload'
+import { sensitiveWordScanHook } from '../hooks/sensitiveWordScan'
 
 export const Articles: CollectionConfig = {
   slug: 'articles',
@@ -14,6 +15,9 @@ export const Articles: CollectionConfig = {
     delete: ({ req }) => Boolean(req.user),
   },
   versions: { drafts: true },
+  hooks: {
+    beforeChange: [sensitiveWordScanHook],
+  },
   fields: [
     { name: 'title', type: 'text', required: true, label: '标题' },
     { name: 'slug', type: 'text', required: true, unique: true, label: 'Slug' },

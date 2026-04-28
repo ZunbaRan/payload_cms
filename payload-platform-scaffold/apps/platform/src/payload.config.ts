@@ -81,5 +81,16 @@ export default buildConfig({
   secret: process.env.PAYLOAD_SECRET || 'dev-secret',
   typescript: { outputFile: path.resolve(dirname, 'payload-types.ts') },
   db: sqliteAdapter({ client: { url: process.env.DATABASE_URL || 'file:./data.db' } }),
+  jobs: {
+    // 开发模式自动 tick 一次队列；生产请用独立 worker 进程
+    autoRun: [
+      {
+        cron: '* * * * *',
+        limit: 10,
+        queue: 'default',
+      },
+    ],
+    shouldAutoRun: () => process.env.JOBS_AUTORUN !== 'false',
+  },
   sharp,
 })

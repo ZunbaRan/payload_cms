@@ -1,4 +1,5 @@
 import type { CollectionConfig } from 'payload'
+import { runNowEndpoint } from '../endpoints/runNow'
 
 export const Tasks: CollectionConfig = {
   slug: 'tasks',
@@ -13,6 +14,7 @@ export const Tasks: CollectionConfig = {
     update: ({ req }) => Boolean(req.user),
     delete: ({ req }) => Boolean(req.user),
   },
+  endpoints: [runNowEndpoint],
   fields: [
     { name: 'name', type: 'text', required: true, label: '任务名' },
     { name: 'description', type: 'textarea', label: '描述' },

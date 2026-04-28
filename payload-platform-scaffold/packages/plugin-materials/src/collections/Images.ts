@@ -1,4 +1,11 @@
 import type { CollectionConfig } from 'payload'
+import { makeCountSyncHooks } from '../hooks/countSync'
+
+const countHooks = makeCountSyncHooks({
+  parentCollection: 'image-libraries',
+  parentField: 'imageCount',
+  childForeignKey: 'library',
+})
 
 export const Images: CollectionConfig = {
   slug: 'images',
@@ -16,6 +23,10 @@ export const Images: CollectionConfig = {
     create: ({ req }) => Boolean(req.user),
     update: ({ req }) => Boolean(req.user),
     delete: ({ req }) => Boolean(req.user),
+  },
+  hooks: {
+    afterChange: [countHooks.afterChange],
+    afterDelete: [countHooks.afterDelete],
   },
   fields: [
     { name: 'alt', type: 'text', label: 'Alt 文本' },
