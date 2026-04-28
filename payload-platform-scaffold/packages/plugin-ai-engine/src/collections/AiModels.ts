@@ -1,11 +1,19 @@
 import type { CollectionConfig } from 'payload'
+import { testConnectionEndpoint } from '../endpoints/testConnection'
 
 export const AiModels: CollectionConfig = {
   slug: 'ai-models',
   admin: {
     useAsTitle: 'name',
     group: 'AI 引擎',
-    defaultColumns: ['name', 'provider', 'modelId', 'isActive', 'priority'],
+    defaultColumns: ['name', 'modelType', 'provider', 'modelId', 'isActive', 'priority'],
+    components: {
+      edit: {
+        beforeDocumentControls: [
+          '@scaffold/plugin-ai-engine/admin/AiModelTestButton#default',
+        ],
+      },
+    },
   },
   access: {
     read: ({ req }) => Boolean(req.user),
@@ -13,6 +21,7 @@ export const AiModels: CollectionConfig = {
     update: ({ req }) => Boolean(req.user),
     delete: ({ req }) => Boolean(req.user),
   },
+  endpoints: [testConnectionEndpoint],
   fields: [
     { name: 'name', type: 'text', required: true, label: '名称' },
     {

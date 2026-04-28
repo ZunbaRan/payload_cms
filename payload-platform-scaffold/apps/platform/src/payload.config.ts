@@ -2,6 +2,7 @@ import { sqliteAdapter } from '@payloadcms/db-sqlite'
 import { mcpPlugin } from '@payloadcms/plugin-mcp'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { aiEnginePlugin } from '@scaffold/plugin-ai-engine'
+import { agentPlugin } from '@scaffold/plugin-agent'
 import { contentPlugin } from '@scaffold/plugin-content'
 import { knowledgeBasePlugin } from '@scaffold/plugin-knowledge-base'
 import { materialsPlugin } from '@scaffold/plugin-materials'
@@ -63,6 +64,7 @@ export default buildConfig({
     aiEnginePlugin(),
     contentPlugin(),
     tasksPlugin(),
+    agentPlugin(),
     moderationPlugin(),
     urlImportPlugin(),
     siteSettingsPlugin(),

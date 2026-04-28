@@ -22,6 +22,7 @@
     "@payloadcms/richtext-lexical": "3.84.1",
     "@payloadcms/ui": "3.84.1",
     "@scaffold/plugin-ai-engine": "workspace:*",
+    "@scaffold/plugin-agent": "workspace:*",
     "@scaffold/plugin-content": "workspace:*",
     "@scaffold/plugin-knowledge-base": "workspace:*",
     "@scaffold/plugin-materials": "workspace:*",
