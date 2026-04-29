@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Slug 与 AI Task 架构原理</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #020617;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 40px 32px;
+    color: #e2e8f0;
+    min-height: 100vh;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .pulse {
+    width: 10px; height: 10px;
+    background: #22d3ee;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; }
+    50% { opacity:0.4; }
+  }
+  h1 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #f1f5f9;
+  }
+  .subtitle {
+    font-size: 11px;
+    color: #64748b;
+    margin-bottom: 28px;
+    margin-left: 22px;
+  }
+
+  .diagram-card {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    padding: 0;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .card {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .card-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .cyan   { background: #22d3ee; }
+  .green  { background: #34d399; }
+  .violet { background: #a78bfa; }
+  .amber  { background: #fbbf24; }
+  .rose   { background: #fb7185; }
+  .orange { background: #fb923c; }
+
+  .card h3 {
+    font-size: 11px;
+    font-weight: 700;
+    color: #f1f5f9;
+  }
+  .card ul { list-style: none; }
+  .card ul li {
+    font-size: 10px;
+    color: #94a3b8;
+    padding: 3px 0;
+    line-height: 1.5;
+  }
+
+  footer {
+    font-size: 9px;
+    color: #334155;
+    text-align: center;
+    letter-spacing: 0.1em;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="pulse"></div>
+  <h1>Slug × AI Task 架构原理</h1>
+</div>
+<p class="subtitle">两种 Slug 的含义 · 稳定调用链 · Agent 任务执行全流程</p>
+
+<div class="diagram-card">
+<svg viewBox="0 0 1000 820" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Grid background -->
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+    </pattern>
+    <!-- Arrows -->
+    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+    </marker>
+    <marker id="arr-cyan" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee"/>
+    </marker>
+    <marker id="arr-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#34d399"/>
+    </marker>
+    <marker id="arr-violet" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa"/>
+    </marker>
+    <marker id="arr-amber" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#fbbf24"/>
+    </marker>
+  </defs>
+
+  <!-- BG -->
+  <rect width="1000" height="820" fill="#0f172a"/>
+  <rect width="1000" height="820" fill="url(#grid)"/>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!--  ZONE A: 两种 Slug 概念对比（上半部分）               -->
+  <!-- ══════════════════════════════════════════════════════ -->
+
+  <!-- Zone A label -->
+  <text x="500" y="28" font-family="JetBrains Mono" font-size="8" fill="#334155" text-anchor="middle" letter-spacing="0.18em">概念区 — 两种 SLUG 的不同含义</text>
+
+  <!-- ── LEFT: Collection-level slug ── -->
+  <rect x="30" y="38" width="440" height="220" rx="12" fill="none" stroke="#1e3a5f" stroke-width="1" stroke-dasharray="8,4"/>
+  <text x="46" y="56" font-family="JetBrains Mono" font-size="8" fill="#22d3ee" letter-spacing="0.14em">① COLLECTION-LEVEL SLUG  (集合标识符)</text>
+
+  <!-- CollectionConfig box -->
+  <rect x="50" y="66" width="200" height="76" rx="6" fill="#0f172a"/>
+  <rect x="50" y="66" width="200" height="76" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="150" y="86" font-family="JetBrains Mono" font-size="10" font-weight="600" fill="white" text-anchor="middle">CollectionConfig</text>
+  <text x="150" y="104" font-family="JetBrains Mono" font-size="9" fill="#94a3b8" text-anchor="middle">slug: 'tags'</text>
+  <text x="150" y="120" font-family="JetBrains Mono" font-size="8" fill="#64748b" text-anchor="middle">slug: 'agent-tasks'</text>
+  <text x="150" y="134" font-family="JetBrains Mono" font-size="8" fill="#64748b" text-anchor="middle">slug: 'articles'</text>
+
+  <!-- Arrow right -->
+  <line x1="250" y1="104" x2="290" y2="104" stroke="#22d3ee" stroke-width="1.2" marker-end="url(#arr-cyan)"/>
+
+  <!-- REST API + Admin panel boxes -->
+  <rect x="290" y="66" width="160" height="40" rx="6" fill="#0f172a"/>
+  <rect x="290" y="66" width="160" height="40" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.2"/>
+  <text x="370" y="82" font-family="JetBrains Mono" font-size="9" font-weight="600" fill="white" text-anchor="middle">REST API 路径</text>
+  <text x="370" y="98" font-family="JetBrains Mono" font-size="8" fill="#22d3ee" text-anchor="middle">/api/tags</text>
+
+  <rect x="290" y="116" width="160" height="40" rx="6" fill="#0f172a"/>
+  <rect x="290" y="116" width="160" height="40" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.2"/>
+  <text x="370" y="132" font-family="JetBrains Mono" font-size="9" font-weight="600" fill="white" text-anchor="middle">Admin 菜单 URL</text>
+  <text x="370" y="148" font-family="JetBrains Mono" font-size="8" fill="#22d3ee" text-anchor="middle">/admin/collections/tags</text>
+
+  <!-- Arrow from config to admin -->
+  <line x1="250" y1="136" x2="290" y2="136" stroke="#22d3ee" stroke-width="1.2" marker-end="url(#arr-cyan)"/>
+
+  <!-- Explanation note -->
+  <rect x="50" y="158" width="400" height="52" rx="5" fill="rgba(8,51,68,0.15)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="62" y="174" font-family="JetBrains Mono" font-size="9" fill="#64748b">• 这个 slug 在代码里固定，用户看不到也改不了</text>
+  <text x="62" y="190" font-family="JetBrains Mono" font-size="9" fill="#64748b">• 决定整个 Collection 在系统内的身份</text>
+  <text x="62" y="206" font-family="JetBrains Mono" font-size="9" fill="#64748b">• 例：slug:'tags' → 内部用 payload.find({collection:'tags'})</text>
+
+  <!-- ── RIGHT: Document-level slug field ── -->
+  <rect x="530" y="38" width="440" height="220" rx="12" fill="none" stroke="#1e3a5f" stroke-width="1" stroke-dasharray="8,4"/>
+  <text x="546" y="56" font-family="JetBrains Mono" font-size="8" fill="#34d399" letter-spacing="0.14em">② DOCUMENT-LEVEL SLUG FIELD  (文档稳定标识符)</text>
+
+  <!-- Tags doc example -->
+  <rect x="550" y="66" width="180" height="90" rx="6" fill="#0f172a"/>
+  <rect x="550" y="66" width="180" height="90" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="640" y="86" font-family="JetBrains Mono" font-size="10" font-weight="600" fill="white" text-anchor="middle">Tags 文档</text>
+  <text x="640" y="104" font-family="JetBrains Mono" font-size="9" fill="#94a3b8" text-anchor="middle">id: 1 (DB自动分配)</text>
+  <text x="640" y="120" font-family="JetBrains Mono" font-size="9" fill="#94a3b8" text-anchor="middle">name: "电子签"</text>
+  <text x="640" y="136" font-family="JetBrains Mono" font-size="9" fill="#34d399" text-anchor="middle">slug: "electronic-sign" ✓</text>
+  <text x="640" y="152" font-family="JetBrains Mono" font-size="8" fill="#64748b" text-anchor="middle">usageCount: 5</text>
+
+  <!-- Arrow right to agent-tasks -->
+  <rect x="740" y="66" width="200" height="90" rx="6" fill="#0f172a"/>
+  <rect x="740" y="66" width="200" height="90" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="840" y="86" font-family="JetBrains Mono" font-size="10" font-weight="600" fill="white" text-anchor="middle">AgentTask 文档</text>
+  <text x="840" y="104" font-family="JetBrains Mono" font-size="9" fill="#94a3b8" text-anchor="middle">id: 3 (会随迁移变)</text>
+  <text x="840" y="120" font-family="JetBrains Mono" font-size="9" fill="#94a3b8" text-anchor="middle">name: "生成摘要"</text>
+  <text x="840" y="136" font-family="JetBrains Mono" font-size="9" fill="#34d399" text-anchor="middle">slug: "generate-excerpt" ✓</text>
+  <text x="840" y="152" font-family="JetBrains Mono" font-size="8" fill="#64748b" text-anchor="middle">aiModel → GPT-4o</text>
+
+  <!-- Note -->
+  <rect x="550" y="168" width="400" height="52" rx="5" fill="rgba(6,78,59,0.15)" stroke="#1e3a5f" stroke-width="1"/>
+  <text x="562" y="184" font-family="JetBrains Mono" font-size="9" fill="#64748b">• 这个 slug 是你在 Admin UI 里手动填写的字段</text>
+  <text x="562" y="200" font-family="JetBrains Mono" font-size="9" fill="#64748b">• 数据库 ID 迁移后可能改变，slug 永远不变</text>
+  <text x="562" y="216" font-family="JetBrains Mono" font-size="9" fill="#64748b">• 业务代码按 slug 调用，解耦 ID 依赖</text>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!--  ZONE B: AI Task 调用全链路                           -->
+  <!-- ══════════════════════════════════════════════════════ -->
+
+  <text x="500" y="284" font-family="JetBrains Mono" font-size="8" fill="#334155" text-anchor="middle" letter-spacing="0.18em">调用链 — 用 SLUG 触发 AI 任务的完整流程</text>
+
+  <!-- Cluster boundary for the full flow -->
+  <rect x="30" y="294" width="940" height="386" rx="12" fill="none" stroke="#2d1b00" stroke-width="1.5" stroke-dasharray="8,4"/>
+  <text x="50" y="314" font-family="JetBrains Mono" font-size="8" fill="#fbbf24" letter-spacing="0.12em">PAYLOAD PLATFORM — AI TASK EXECUTION PIPELINE</text>
+
+  <!-- ── Step 1: Caller ── -->
+  <rect x="50" y="324" width="150" height="70" rx="6" fill="#0f172a"/>
+  <rect x="50" y="324" width="150" height="70" rx="6" fill="rgba(30,41,59,0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="125" y="344" font-family="JetBrains Mono" font-size="10" font-weight="600" fill="white" text-anchor="middle">业务代码 / 按钮</text>
+  <text x="125" y="360" font-family="JetBrains Mono" font-size="8" fill="#94a3b8" text-anchor="middle">POST</text>
+  <text x="125" y="374" font-family="JetBrains Mono" font-size="8" fill="#fbbf24" text-anchor="middle">/api/agent-tasks/</text>
+  <text x="125" y="386" font-family="JetBrains Mono" font-size="8" fill="#fbbf24" text-anchor="middle">generate-excerpt/run</text>
+
+  <!-- Arrow -->
+  <line x1="200" y1="359" x2="242" y2="359" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+  <rect x="204" y="349" width="34" height="14" rx="2" fill="#0f172a"/>
+  <text x="221" y="359" font-family="JetBrains Mono" font-size="7" fill="#94a3b8" text-anchor="middle">slug</text>
+
+  <!-- ── Step 2: runAgentTaskEndpoint ── -->
+  <rect x="242" y="314" width="200" height="130" rx="6" fill="#0f172a"/>
+  <rect x="242" y="314" width="200" height="130" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="342" y="334" font-family="JetBrains Mono" font-size="10" font-weight="600" fill="white" text-anchor="middle">runAgentTaskEndpoint</text>
+  <text x="342" y="350" font-family="JetBrains Mono" font-size="8" fill="#64748b" text-anchor="middle">POST /:id/run</text>
+  <!-- sub steps -->
+  <rect x="256" y="360" width="172" height="22" rx="3" fill="rgba(6,78,59,0.3)" stroke="#34d399" stroke-width="0.8"/>
+  <text x="342" y="375" font-family="JetBrains Mono" font-size="8" fill="#34d399" text-anchor="middle">① findByID(id) 先尝试数字ID</text>
+  <rect x="256" y="388" width="172" height="22" rx="3" fill="rgba(6,78,59,0.5)" stroke="#34d399" stroke-width="0.8"/>
+  <text x="342" y="403" font-family="JetBrains Mono" font-size="8" fill="#34d399" text-anchor="middle">② ID不存在 → findBySlug(id)</text>
+  <text x="342" y="428" font-family="JetBrains Mono" font-size="8" fill="#64748b" text-anchor="middle">解析 inputs:{} 变量</text>
+
+  <!-- Arrow -->
+  <line x1="442" y1="359" x2="484" y2="359" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ── Step 3: agent-task-runs collection ── -->
+  <rect x="484" y="314" width="170" height="90" rx="6" fill="#0f172a"/>
+  <rect x="484" y="314" width="170" height="90" rx="6" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="569" y="334" font-family="JetBrains Mono" font-size="10" font-weight="600" fill="white" text-anchor="middle">agent-task-runs</text>
+  <text x="569" y="350" font-family="JetBrains Mono" font-size="8" fill="#94a3b8" text-anchor="middle">status: queued</text>
+  <text x="569" y="366" font-family="JetBrains Mono" font-size="8" fill="#94a3b8" text-anchor="middle">agentTask: { id: 3 }</text>
+  <text x="569" y="382" font-family="JetBrains Mono" font-size="8" fill="#a78bfa" text-anchor="middle">inputs: { url: "..." }</text>
+  <text x="569" y="398" font-family="JetBrains Mono" font-size="8" fill="#64748b" text-anchor="middle">CREATE 记录追踪运行</text>
+
+  <!-- Arrow -->
+  <line x1="654" y1="359" x2="694" y2="359" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ── Step 4: Payload Jobs Queue ── -->
+  <rect x="694" y="330" width="240" height="30" rx="4" fill="rgba(251,146,60,0.3)" stroke="#fb923c" stroke-width="1"/>
+  <text x="814" y="350" font-family="JetBrains Mono" font-size="8" font-weight="600" fill="#fb923c" text-anchor="middle">Payload Jobs Queue  →  processAgentTaskRun</text>
+
+  <!-- Arrow down to process -->
+  <line x1="814" y1="360" x2="814" y2="400" stroke="#fb923c" stroke-width="1.5" marker-end="url(#arr-amber)"/>
+
+  <!-- ── Step 5: processAgentTaskRun job ── -->
+  <rect x="694" y="400" width="240" height="170" rx="6" fill="#0f172a"/>
+  <rect x="694" y="400" width="240" height="170" rx="6" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="814" y="420" font-family="JetBrains Mono" font-size="10" font-weight="600" fill="white" text-anchor="middle">processAgentTaskRun</text>
+  <text x="814" y="436" font-family="JetBrains Mono" font-size="8" fill="#64748b" text-anchor="middle">Payload Job Handler</text>
+
+  <!-- sub steps in job -->
+  <rect x="708" y="446" width="212" height="20" rx="3" fill="rgba(120,53,15,0.4)" stroke="#fbbf24" stroke-width="0.8"/>
+  <text x="814" y="460" font-family="JetBrains Mono" font-size="8" fill="#fbbf24" text-anchor="middle">① 加载 agent-task 配置 + prompt</text>
+
+  <rect x="708" y="472" width="212" height="20" rx="3" fill="rgba(120,53,15,0.4)" stroke="#fbbf24" stroke-width="0.8"/>
+  <text x="814" y="486" font-family="JetBrains Mono" font-size="8" fill="#fbbf24" text-anchor="middle">② 渲染 {{变量}} → 最终 prompt</text>
+
+  <rect x="708" y="498" width="212" height="20" rx="3" fill="rgba(120,53,15,0.5)" stroke="#fbbf24" stroke-width="0.8"/>
+  <text x="814" y="512" font-family="JetBrains Mono" font-size="8" fill="#fbbf24" text-anchor="middle">③ 调用 AI API（关联 skills）</text>
+
+  <rect x="708" y="524" width="212" height="20" rx="3" fill="rgba(120,53,15,0.4)" stroke="#fbbf24" stroke-width="0.8"/>
+  <text x="814" y="538" font-family="JetBrains Mono" font-size="8" fill="#fbbf24" text-anchor="middle">④ 处理 outputMode (text/file)</text>
+
+  <rect x="708" y="550" width="212" height="14" rx="3" fill="none"/>
+  <text x="814" y="562" font-family="JetBrains Mono" font-size="8" fill="#64748b" text-anchor="middle">⑤ 更新 run.status = success</text>
+
+  <!-- ── Step 6: AI Model / Skills ── -->
+  <!-- Arrow left from job to AI model -->
+  <line x1="694" y1="510" x2="664" y2="510" stroke="#34d399" stroke-width="1.5" marker-end="url(#arr-green)"/>
+
+  <rect x="484" y="460" width="180" height="100" rx="6" fill="#0f172a"/>
+  <rect x="484" y="460" width="180" height="100" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="574" y="480" font-family="JetBrains Mono" font-size="10" font-weight="600" fill="white" text-anchor="middle">AI Models</text>
+  <text x="574" y="498" font-family="JetBrains Mono" font-size="9" fill="#94a3b8" text-anchor="middle">provider: openai</text>
+  <text x="574" y="514" font-family="JetBrains Mono" font-size="9" fill="#94a3b8" text-anchor="middle">modelId: gpt-4o</text>
+  <text x="574" y="530" font-family="JetBrains Mono" font-size="9" fill="#94a3b8" text-anchor="middle">apiKey: sk-…</text>
+  <text x="574" y="546" font-family="JetBrains Mono" font-size="8" fill="#34d399" text-anchor="middle">temperature / maxTokens</text>
+
+  <!-- Agent Skills -->
+  <rect x="242" y="460" width="230" height="100" rx="6" fill="#0f172a"/>
+  <rect x="242" y="460" width="230" height="100" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="357" y="480" font-family="JetBrains Mono" font-size="10" font-weight="600" fill="white" text-anchor="middle">Agent Skills</text>
+  <text x="357" y="498" font-family="JetBrains Mono" font-size="9" fill="#94a3b8" text-anchor="middle">slug: 'web-search'</text>
+  <text x="357" y="514" font-family="JetBrains Mono" font-size="9" fill="#94a3b8" text-anchor="middle">slug: 'read-url'</text>
+  <text x="357" y="530" font-family="JetBrains Mono" font-size="9" fill="#94a3b8" text-anchor="middle">工具调用 / bash 命令</text>
+  <text x="357" y="546" font-family="JetBrains Mono" font-size="8" fill="#34d399" text-anchor="middle">agent 自主决定调用哪些 skill</text>
+
+  <!-- Arrow from endpoint to skills (knowledge) -->
+  <line x1="484" y1="510" x2="472" y2="510" stroke="#34d399" stroke-width="1.2" marker-end="url(#arr-green)"/>
+
+  <!-- ── Step 7: Output ── -->
+  <!-- Arrow from job down to output -->
+  <line x1="814" y1="570" x2="814" y2="604" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="694" y="604" width="240" height="60" rx="6" fill="#0f172a"/>
+  <rect x="694" y="604" width="240" height="60" rx="6" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="814" y="624" font-family="JetBrains Mono" font-size="10" font-weight="600" fill="white" text-anchor="middle">finalOutput</text>
+  <text x="814" y="642" font-family="JetBrains Mono" font-size="9" fill="#a78bfa" text-anchor="middle">text: 直接返回 AI 生成文字</text>
+  <text x="814" y="656" font-family="JetBrains Mono" font-size="9" fill="#94a3b8" text-anchor="middle">file: 写入磁盘 → 返回路径</text>
+
+  <!-- ── Caller receives response ── -->
+  <line x1="694" y1="634" x2="220" y2="634" stroke="#64748b" stroke-width="1" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+  <rect x="340" y="620" width="200" height="14" rx="2" fill="#0f172a"/>
+  <text x="440" y="630" font-family="JetBrains Mono" font-size="8" fill="#64748b" text-anchor="middle">{ success:true, agentTaskRunId, jobId }</text>
+
+  <rect x="50" y="604" width="170" height="60" rx="6" fill="#0f172a"/>
+  <rect x="50" y="604" width="170" height="60" rx="6" fill="rgba(30,41,59,0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="135" y="624" font-family="JetBrains Mono" font-size="10" font-weight="600" fill="white" text-anchor="middle">调用方响应</text>
+  <text x="135" y="642" font-family="JetBrains Mono" font-size="9" fill="#94a3b8" text-anchor="middle">立即返回 jobId</text>
+  <text x="135" y="656" font-family="JetBrains Mono" font-size="8" fill="#64748b" text-anchor="middle">Job 后台异步执行</text>
+
+  <!-- ════════════════════════════ -->
+  <!-- Slug lookup highlight box -->
+  <!-- ════════════════════════════ -->
+  <rect x="242" y="454" width="200" height="6" rx="2" fill="rgba(251,191,36,0.15)" stroke="none"/>
+
+  <!-- KEY INSIGHT annotation -->
+  <rect x="50" y="450" width="188" height="44" rx="5" fill="rgba(136,19,55,0.25)" stroke="#fb7185" stroke-width="1"/>
+  <text x="62" y="466" font-family="JetBrains Mono" font-size="8" fill="#fb7185" font-weight="600">关键：Slug 容错查找</text>
+  <text x="62" y="480" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">先 ID → 再 slug</text>
+  <text x="62" y="492" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">两种方式都能触发</text>
+
+  <line x1="238" y1="468" x2="247" y2="440" stroke="#fb7185" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#arr)"/>
+
+  <!-- ════════════════════════════ -->
+  <!-- LEGEND                       -->
+  <!-- ════════════════════════════ -->
+  <rect x="30" y="695" width="940" height="110" rx="8" fill="rgba(15,23,42,0.8)" stroke="#1e293b" stroke-width="1"/>
+  <text x="50" y="715" font-family="JetBrains Mono" font-size="8" fill="#334155" letter-spacing="0.14em">LEGEND</text>
+
+  <!-- Cyan: Frontend/API -->
+  <rect x="50" y="726" width="24" height="14" rx="3" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="80" y="737" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">Collection 标识符 / API 路径</text>
+
+  <!-- Green: Backend -->
+  <rect x="260" y="726" width="24" height="14" rx="3" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="290" y="737" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">后端服务 / Endpoint / AI Model</text>
+
+  <!-- Violet: Database -->
+  <rect x="500" y="726" width="24" height="14" rx="3" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="530" y="737" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">数据库 / 持久化记录</text>
+
+  <!-- Amber: Job Queue -->
+  <rect x="700" y="726" width="24" height="14" rx="3" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="730" y="737" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">Job Queue / 异步任务</text>
+
+  <!-- Orange: Bus -->
+  <rect x="50" y="752" width="60" height="14" rx="3" fill="rgba(251,146,60,0.3)" stroke="#fb923c" stroke-width="1"/>
+  <text x="118" y="763" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">消息队列 / 事件总线</text>
+
+  <!-- Rose: security note -->
+  <rect x="260" y="752" width="24" height="14" rx="3" fill="rgba(136,19,55,0.25)" stroke="#fb7185" stroke-width="1"/>
+  <text x="290" y="763" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">安全关键逻辑 / 容错处理</text>
+
+  <!-- Gray: external -->
+  <rect x="500" y="752" width="24" height="14" rx="3" fill="rgba(30,41,59,0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="530" y="763" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">外部调用方 / 业务代码</text>
+
+  <!-- Summary text -->
+  <text x="50" y="790" font-family="JetBrains Mono" font-size="9" fill="#64748b">Slug 的本质：一个稳定的人类可读标识符，让业务代码与数据库 ID 解耦，迁移数据后调用链不断。</text>
+</svg>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-dot cyan"></div>
+      <h3>① Collection Slug（代码层）</h3>
+    </div>
+    <ul>
+      <li>• 在 CollectionConfig 里定义 <code>slug: 'tags'</code></li>
+      <li>• 自动生成 REST API：<code>/api/tags</code></li>
+      <li>• Admin 菜单 URL：<code>/admin/collections/tags</code></li>
+      <li>• 代码里用 <code>payload.find({collection:'tags'})</code></li>
+      <li>• 用户永远看不到这个 slug，它在代码里固定</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-dot green"></div>
+      <h3>② Document Slug Field（数据层）</h3>
+    </div>
+    <ul>
+      <li>• 你在 Admin UI 里为每个文档手动填的字段</li>
+      <li>• 例：Tags 文档 name="电子签" → slug="electronic-sign"</li>
+      <li>• 例：AgentTask name="生成摘要" → slug="generate-excerpt"</li>
+      <li>• 数据库 ID 可能因迁移变化，slug 你自己控制</li>
+      <li>• 建议填写规则：小写英文+连字符，简洁明确</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-dot amber"></div>
+      <h3>③ AI Task 调用（运行时）</h3>
+    </div>
+    <ul>
+      <li>• <code>POST /api/agent-tasks/generate-excerpt/run</code></li>
+      <li>• Endpoint 先尝试 findByID，ID 不存在则 findBySlug</li>
+      <li>• 支持传 <code>inputs:{url:"..."}</code> 填充 prompt 变量</li>
+      <li>• 立即返回 jobId，Job 后台异步执行</li>
+      <li>• 结果通过 agent-task-runs 记录查询，不阻塞调用方</li>
+    </ul>
+  </div>
+</div>
+
+<footer>
+  payload-platform-scaffold · plugin-agent · runAgentTaskEndpoint + processAgentTaskRun · JetBrains Mono
+</footer>
+
+</body>
+</html>

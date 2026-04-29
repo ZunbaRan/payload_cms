@@ -1,7 +1,28 @@
-import type { CollectionAfterChangeHook, CollectionConfig } from 'payload'
+import type {
+  CollectionAfterChangeHook,
+  CollectionBeforeDeleteHook,
+  CollectionConfig,
+} from 'payload'
 import { ragSearchEndpoint } from '../endpoints/ragSearch'
 import { reindexEndpoint } from '../endpoints/reindex'
-import { fetchViaAgentEndpoint } from '../endpoints/fetchViaAgent'
+
+/**
+ * 删除 KB 前先级联清理子表：knowledge-chunks / kb-index-runs。
+ * 否则 SQLite 会报 NOT NULL constraint failed: knowledge_chunks.knowledge_base_id
+ * （Payload 默认会尝试把外键置 NULL，但子字段是 required）。
+ */
+const cascadeCleanupBeforeDelete: CollectionBeforeDeleteHook = async ({ id, req }) => {
+  await req.payload.delete({
+    collection: 'knowledge-chunks',
+    where: { knowledgeBase: { equals: id } },
+    overrideAccess: true,
+  })
+  await req.payload.delete({
+    collection: 'kb-index-runs',
+    where: { knowledgeBase: { equals: id } },
+    overrideAccess: true,
+  })
+}
 
 /**
  * 当 rawContent 改变时仅把状态置回 pending（"待索引"），不再自动切块。
@@ -48,9 +69,10 @@ export const KnowledgeBases: CollectionConfig = {
     update: ({ req }) => Boolean(req.user),
     delete: ({ req }) => Boolean(req.user),
   },
-  endpoints: [ragSearchEndpoint, reindexEndpoint, fetchViaAgentEndpoint],
+  endpoints: [ragSearchEndpoint, reindexEndpoint],
   hooks: {
     afterChange: [invalidateOnRawChange],
+    beforeDelete: [cascadeCleanupBeforeDelete],
   },
   fields: [
     { name: 'name', type: 'text', required: true, label: '名称' },
@@ -84,18 +106,6 @@ export const KnowledgeBases: CollectionConfig = {
       admin: {
         condition: (data: Record<string, unknown> | undefined) =>
           (data?.sourceType as string | undefined) === 'url',
-      },
-    },
-    {
-      name: 'fetchAgentTask',
-      type: 'relationship',
-      relationTo: 'agent-tasks',
-      label: '抓取 Agent 任务',
-      admin: {
-        condition: (data: Record<string, unknown> | undefined) =>
-          (data?.sourceType as string | undefined) === 'url',
-        description:
-          '点击「🌐 用 Agent 抓取」时调用该任务；任务的 prompt 用 {{url}} 占位符接收来源 URL，必须把抓到的 markdown 写入文件并把绝对路径作为最终输出',
       },
     },
     {

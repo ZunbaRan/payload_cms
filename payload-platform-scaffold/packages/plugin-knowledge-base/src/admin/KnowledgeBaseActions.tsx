@@ -1,22 +1,20 @@
 'use client'
-import { useDocumentInfo, useAllFormFields } from '@payloadcms/ui'
+import { useDocumentInfo } from '@payloadcms/ui'
 import React, { useState } from 'react'
 
 /**
- * KnowledgeBase 详情页右上动作按钮：
+ * KnowledgeBase 详情页动作按钮：
  *   - 📚 开始索引       → POST /api/knowledge-bases/:id/reindex
- *   - 🌐 用 Agent 抓取  → POST /api/knowledge-bases/:id/fetch-via-agent  (仅 sourceType=url + 配置了 fetchAgentTask)
+ *
+ * 「抓取 URL」已统一到通用「🤖 AI 任务」面板（plugin-agent 自动注入），
+ * 通过在 agent-task 上配置 boundCollection=knowledge-bases + targetFieldPath=rawContent 即可。
  */
 const KnowledgeBaseActions: React.FC = () => {
   const { id } = useDocumentInfo()
-  const [fields] = useAllFormFields()
   const [busy, setBusy] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
 
   if (!id) return null
-
-  const sourceType = (fields?.sourceType?.value as string | undefined) || 'manual'
-  const hasFetchAgent = Boolean(fields?.fetchAgentTask?.value)
 
   const post = async (path: string, label: string) => {
     setBusy(label)
@@ -43,32 +41,20 @@ const KnowledgeBaseActions: React.FC = () => {
   return (
     <div
       style={{
-        marginTop: 16,
-        padding: 12,
+        marginTop: 8,
+        padding: 8,
         border: '1px solid var(--theme-border-color)',
         borderRadius: 4,
         display: 'flex',
         flexDirection: 'column',
-        gap: 8,
+        gap: 6,
       }}
     >
-      {sourceType === 'url' && (
-        <button
-          type="button"
-          disabled={!hasFetchAgent || busy !== null}
-          onClick={() => post('/fetch-via-agent', '抓取')}
-          className="btn btn--style-secondary btn--size-medium"
-          style={{ width: '100%' }}
-          title={hasFetchAgent ? '' : '请先在下方选择「抓取 Agent 任务」并保存'}
-        >
-          {busy === '抓取' ? '抓取入队中…' : '🌐 用 Agent 抓取来源 URL'}
-        </button>
-      )}
       <button
         type="button"
         disabled={busy !== null}
         onClick={() => post('/reindex', '索引')}
-        className="btn btn--style-primary btn--size-medium"
+        className="btn btn--style-primary btn--size-small"
         style={{ width: '100%' }}
       >
         {busy === '索引' ? '索引入队中…' : '📚 开始索引（切块 + 向量化）'}

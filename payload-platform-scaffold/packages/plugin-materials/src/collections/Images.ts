@@ -44,6 +44,12 @@ export const Images: CollectionConfig = {
       admin: { readOnly: true, position: 'sidebar' },
       label: '使用次数',
     },
-    { name: 'tags', type: 'text', hasMany: true, label: '标签' },
+    {
+      name: 'tags',
+      type: 'relationship',
+      relationTo: 'tags',
+      hasMany: true,
+      label: '标签',
+    },
   ],
 }

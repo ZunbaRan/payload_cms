@@ -40,6 +40,12 @@ export const Keywords: CollectionConfig = {
       label: '权重',
       admin: { position: 'sidebar' },
     },
-    { name: 'tags', type: 'text', hasMany: true, label: '标签' },
+    {
+      name: 'tags',
+      type: 'relationship',
+      relationTo: 'tags',
+      hasMany: true,
+      label: '标签',
+    },
   ],
 }

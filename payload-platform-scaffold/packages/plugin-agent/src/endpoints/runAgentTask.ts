@@ -12,11 +12,26 @@ export const runAgentTaskEndpoint: Endpoint = {
     const id = (req.routeParams as { id?: string } | undefined)?.id
     if (!id) return Response.json({ error: 'Missing id' }, { status: 400 })
 
-    const task = await req.payload.findByID({
-      collection: 'agent-tasks',
-      id,
-      depth: 0,
-    })
+    let task: { id: string | number } | null = null
+    try {
+      task = (await req.payload.findByID({
+        collection: 'agent-tasks',
+        id,
+        depth: 0,
+      })) as { id: string | number } | null
+    } catch {
+      // allow stable slug calls: /api/agent-tasks/generate-excerpt/run
+    }
+
+    if (!task) {
+      const bySlug = await req.payload.find({
+        collection: 'agent-tasks',
+        where: { slug: { equals: id } },
+        limit: 1,
+        depth: 0,
+      })
+      task = (bySlug.docs[0] as { id: string | number } | undefined) || null
+    }
     if (!task) return Response.json({ error: 'Agent task not found' }, { status: 404 })
 
     let inputs: Record<string, string> | undefined
@@ -30,7 +45,7 @@ export const runAgentTaskEndpoint: Endpoint = {
     const taskRun = await req.payload.create({
       collection: 'agent-task-runs',
       data: {
-        agentTask: id,
+        agentTask: task.id,
         status: 'queued',
         ...(inputs ? { inputs } : {}),
       } as never,
@@ -40,7 +55,7 @@ export const runAgentTaskEndpoint: Endpoint = {
 
     await req.payload.update({
       collection: 'agent-tasks',
-      id,
+      id: task.id,
       data: { lastRunStatus: 'queued' } as never,
       depth: 0,
       overrideAccess: true,
@@ -48,7 +63,7 @@ export const runAgentTaskEndpoint: Endpoint = {
 
     const job = await req.payload.jobs.queue({
       task: 'processAgentTaskRun',
-      input: { agentTaskId: String(id), agentTaskRunId: String(taskRun.id) },
+      input: { agentTaskId: String(task.id), agentTaskRunId: String(taskRun.id) },
     })
 
     return Response.json({

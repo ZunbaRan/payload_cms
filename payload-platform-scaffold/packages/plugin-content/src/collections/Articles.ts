@@ -21,7 +21,11 @@ export const Articles: CollectionConfig = {
   fields: [
     { name: 'title', type: 'text', required: true, label: '标题' },
     { name: 'slug', type: 'text', required: true, unique: true, label: 'Slug' },
-    { name: 'excerpt', type: 'textarea', label: '摘要' },
+    {
+      name: 'excerpt',
+      type: 'textarea',
+      label: '摘要',
+    },
     { name: 'content', type: 'richText', label: '正文' },
     {
       name: 'status',

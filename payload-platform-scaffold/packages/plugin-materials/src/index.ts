@@ -5,6 +5,7 @@ import { ImageLibraries } from './collections/ImageLibraries'
 import { Images } from './collections/Images'
 import { KeywordLibraries } from './collections/KeywordLibraries'
 import { Keywords } from './collections/Keywords'
+import { Tags } from './collections/Tags'
 import { TitleLibraries } from './collections/TitleLibraries'
 import { Titles } from './collections/Titles'
 
@@ -21,6 +22,7 @@ export const materialsPlugin =
       collections: [
         ...(incomingConfig.collections || []),
         Authors,
+        Tags,
         TitleLibraries,
         Titles,
         KeywordLibraries,
@@ -37,6 +39,7 @@ export {
   Images,
   KeywordLibraries,
   Keywords,
+  Tags,
   TitleLibraries,
   Titles,
 }

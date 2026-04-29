@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Payload Dev 模式 Schema 同步流程</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #faf7f2;
+    font-family: 'Geist', sans-serif;
+    padding: 48px 32px;
+    min-height: 100vh;
+  }
+  h1 {
+    font-family: 'Instrument Serif', serif;
+    font-size: 1.75rem;
+    font-weight: 400;
+    color: #1c1917;
+    margin-bottom: 6px;
+  }
+  .subtitle {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    color: #78716c;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 40px;
+  }
+  .diagram-wrap {
+    background: #f2ede4;
+    border: 1px solid rgba(120,113,108,0.25);
+    border-radius: 10px;
+    padding: 40px 32px 48px;
+    max-width: 960px;
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+  .legend {
+    margin-top: 32px;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    padding-top: 20px;
+    border-top: 1px solid rgba(120,113,108,0.2);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    color: #57534e;
+  }
+  .legend-swatch {
+    width: 28px;
+    height: 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .callout-box {
+    margin-top: 28px;
+    background: rgba(181,82,58,0.06);
+    border: 1px solid rgba(181,82,58,0.25);
+    border-radius: 8px;
+    padding: 16px 20px;
+    max-width: 720px;
+  }
+  .callout-box p {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: 14px;
+    color: #57534e;
+    line-height: 1.6;
+  }
+  .callout-box strong {
+    font-style: normal;
+    font-family: 'Geist Mono', monospace;
+    font-size: 12px;
+    color: #b5523a;
+  }
+</style>
+</head>
+<body>
+
+<h1>Payload Dev 模式 Schema 同步流程</h1>
+<p class="subtitle">为什么会出现 "Is tags table created or renamed?" 的交互提示</p>
+
+<div class="diagram-wrap">
+<svg viewBox="0 0 880 1080" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 Z" fill="#57534e"/>
+    </marker>
+    <marker id="arr-accent" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 Z" fill="#b5523a"/>
+    </marker>
+    <marker id="arr-blue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 Z" fill="#2563eb"/>
+    </marker>
+  </defs>
+
+  <!-- ═══ BEFORE (左侧) ═══ -->
+  <!-- Section label -->
+  <text x="170" y="28" font-family="Geist Mono, monospace" font-size="8" fill="#78716c" letter-spacing="0.18em" text-anchor="middle" text-transform="uppercase">BEFORE — 代码修改前</text>
+
+  <!-- Old Images collection box -->
+  <rect x="60" y="42" width="220" height="70" rx="6" fill="white" stroke="#1c1917" stroke-width="1.2"/>
+  <text x="170" y="62" font-family="Geist, sans-serif" font-size="11" font-weight="600" fill="#1c1917" text-anchor="middle">Images Collection</text>
+  <text x="170" y="80" font-family="Geist Mono, monospace" font-size="9" fill="#78716c" text-anchor="middle">tags: text, hasMany: true</text>
+  <text x="170" y="96" font-family="Geist Mono, monospace" font-size="9" fill="#78716c" text-anchor="middle">labels: ['电子签', '品牌']</text>
+
+  <!-- Arrow down -->
+  <line x1="170" y1="112" x2="170" y2="138" stroke="#57534e" stroke-width="1.2" marker-end="url(#arr)"/>
+
+  <!-- Old SQLite tables -->
+  <rect x="60" y="142" width="220" height="56" rx="6" fill="rgba(28,25,23,0.05)" stroke="#78716c" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="170" y="162" font-family="Geist Mono, monospace" font-size="9" fill="#57534e" text-anchor="middle">SQLite</text>
+  <text x="170" y="178" font-family="Geist, sans-serif" font-size="11" font-weight="600" fill="#1c1917" text-anchor="middle">images_texts 表</text>
+  <text x="170" y="192" font-family="Geist Mono, monospace" font-size="9" fill="#78716c" text-anchor="middle">image_id | text_val</text>
+
+  <!-- Old Keywords collection box -->
+  <rect x="60" y="230" width="220" height="70" rx="6" fill="white" stroke="#1c1917" stroke-width="1.2"/>
+  <text x="170" y="250" font-family="Geist, sans-serif" font-size="11" font-weight="600" fill="#1c1917" text-anchor="middle">Keywords Collection</text>
+  <text x="170" y="268" font-family="Geist Mono, monospace" font-size="9" fill="#78716c" text-anchor="middle">tags: text, hasMany: true</text>
+  <text x="170" y="284" font-family="Geist Mono, monospace" font-size="9" fill="#78716c" text-anchor="middle">labels: ['合规', 'SaaS']</text>
+
+  <!-- Arrow down -->
+  <line x1="170" y1="300" x2="170" y2="326" stroke="#57534e" stroke-width="1.2" marker-end="url(#arr)"/>
+
+  <!-- Old SQLite keywords_texts -->
+  <rect x="60" y="330" width="220" height="56" rx="6" fill="rgba(28,25,23,0.05)" stroke="#78716c" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="170" y="350" font-family="Geist Mono, monospace" font-size="9" fill="#57534e" text-anchor="middle">SQLite</text>
+  <text x="170" y="366" font-family="Geist, sans-serif" font-size="11" font-weight="600" fill="#1c1917" text-anchor="middle">keywords_texts 表</text>
+  <text x="170" y="382" font-family="Geist Mono, monospace" font-size="9" fill="#78716c" text-anchor="middle">keyword_id | text_val</text>
+
+  <!-- Vertical divider -->
+  <line x1="310" y1="20" x2="310" y2="420" stroke="rgba(120,113,108,0.3)" stroke-width="1" stroke-dasharray="6,4"/>
+  <text x="310" y="220" font-family="Geist Mono, monospace" font-size="9" fill="#78716c" letter-spacing="0.1em" writing-mode="vertical-lr" transform="rotate(180,310,220)" text-anchor="middle">你修改代码</text>
+
+  <!-- ═══ AFTER (右侧) ═══ -->
+  <text x="590" y="28" font-family="Geist Mono, monospace" font-size="8" fill="#78716c" letter-spacing="0.18em" text-anchor="middle" text-transform="uppercase">AFTER — 代码修改后</text>
+
+  <!-- New Tags collection - FOCAL -->
+  <rect x="460" y="42" width="220" height="70" rx="6" fill="rgba(181,82,58,0.08)" stroke="#b5523a" stroke-width="1.5"/>
+  <text x="570" y="58" font-family="Geist Mono, monospace" font-size="7" fill="#b5523a" letter-spacing="0.16em" text-anchor="middle">NEW COLLECTION</text>
+  <text x="570" y="76" font-family="Geist, sans-serif" font-size="11" font-weight="600" fill="#1c1917" text-anchor="middle">Tags Collection</text>
+  <text x="570" y="94" font-family="Geist Mono, monospace" font-size="9" fill="#78716c" text-anchor="middle">slug: 'tags' | name, slug, usageCount</text>
+
+  <!-- New Images collection box -->
+  <rect x="460" y="150" width="220" height="70" rx="6" fill="white" stroke="#1c1917" stroke-width="1.2"/>
+  <text x="570" y="170" font-family="Geist, sans-serif" font-size="11" font-weight="600" fill="#1c1917" text-anchor="middle">Images Collection</text>
+  <text x="570" y="188" font-family="Geist Mono, monospace" font-size="9" fill="#78716c" text-anchor="middle">tags: relationship → 'tags'</text>
+  <text x="570" y="204" font-family="Geist Mono, monospace" font-size="9" fill="#78716c" text-anchor="middle">hasMany: true</text>
+
+  <!-- Arrow from Images to Tags -->
+  <line x1="570" y1="150" x2="570" y2="112" stroke="#2563eb" stroke-width="1.2" marker-end="url(#arr-blue)"/>
+  <rect x="576" y="125" width="50" height="14" rx="2" fill="#f2ede4"/>
+  <text x="601" y="135" font-family="Geist Mono, monospace" font-size="8" fill="#2563eb" text-anchor="middle">rel</text>
+
+  <!-- New Keywords collection box -->
+  <rect x="460" y="258" width="220" height="70" rx="6" fill="white" stroke="#1c1917" stroke-width="1.2"/>
+  <text x="570" y="278" font-family="Geist, sans-serif" font-size="11" font-weight="600" fill="#1c1917" text-anchor="middle">Keywords Collection</text>
+  <text x="570" y="296" font-family="Geist Mono, monospace" font-size="9" fill="#78716c" text-anchor="middle">tags: relationship → 'tags'</text>
+  <text x="570" y="312" font-family="Geist Mono, monospace" font-size="9" fill="#78716c" text-anchor="middle">hasMany: true</text>
+
+  <!-- Arrow from Keywords to Tags (curved) -->
+  <path d="M480,258 C480,160 570,150 570,112" fill="none" stroke="#2563eb" stroke-width="1.2" marker-end="url(#arr-blue)"/>
+  <rect x="488" y="187" width="50" height="14" rx="2" fill="#f2ede4"/>
+  <text x="513" y="197" font-family="Geist Mono, monospace" font-size="8" fill="#2563eb" text-anchor="middle">rel</text>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- MIDDLE SECTION: pnpm dev 启动触发 -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+
+  <line x1="440" y1="420" x2="440" y2="440" stroke="rgba(120,113,108,0.3)" stroke-width="1"/>
+  <line x1="60" y1="420" x2="820" y2="420" stroke="rgba(120,113,108,0.2)" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- Title for middle section -->
+  <text x="440" y="455" font-family="Geist Mono, monospace" font-size="8" fill="#78716c" letter-spacing="0.18em" text-anchor="middle">pnpm dev 启动后的 Schema 同步流程</text>
+
+  <!-- START oval -->
+  <ellipse cx="440" cy="490" rx="90" ry="22" fill="white" stroke="#1c1917" stroke-width="1.5"/>
+  <text x="440" y="495" font-family="Geist, sans-serif" font-size="11" font-weight="600" fill="#1c1917" text-anchor="middle">pnpm dev 启动</text>
+
+  <line x1="440" y1="512" x2="440" y2="534" stroke="#57534e" stroke-width="1.2" marker-end="url(#arr)"/>
+
+  <!-- Step: read config -->
+  <rect x="330" y="538" width="220" height="44" rx="6" fill="white" stroke="#1c1917" stroke-width="1.2"/>
+  <text x="440" y="557" font-family="Geist, sans-serif" font-size="11" font-weight="600" fill="#1c1917" text-anchor="middle">读取 payload.config.ts</text>
+  <text x="440" y="573" font-family="Geist Mono, monospace" font-size="9" fill="#78716c" text-anchor="middle">解析所有 Collection 定义</text>
+
+  <line x1="440" y1="582" x2="440" y2="604" stroke="#57534e" stroke-width="1.2" marker-end="url(#arr)"/>
+
+  <!-- Step: compute target schema -->
+  <rect x="330" y="608" width="220" height="44" rx="6" fill="white" stroke="#1c1917" stroke-width="1.2"/>
+  <text x="440" y="627" font-family="Geist, sans-serif" font-size="11" font-weight="600" fill="#1c1917" text-anchor="middle">计算目标 Schema</text>
+  <text x="440" y="643" font-family="Geist Mono, monospace" font-size="9" fill="#78716c" text-anchor="middle">tags表 + images_rels + keywords_rels</text>
+
+  <line x1="440" y1="652" x2="440" y2="674" stroke="#57534e" stroke-width="1.2" marker-end="url(#arr)"/>
+
+  <!-- Step: diff with DB -->
+  <rect x="330" y="678" width="220" height="44" rx="6" fill="white" stroke="#1c1917" stroke-width="1.2"/>
+  <text x="440" y="697" font-family="Geist, sans-serif" font-size="11" font-weight="600" fill="#1c1917" text-anchor="middle">与数据库当前 Schema 对比</text>
+  <text x="440" y="713" font-family="Geist Mono, monospace" font-size="9" fill="#78716c" text-anchor="middle">Pulling schema from database…</text>
+
+  <line x1="440" y1="722" x2="440" y2="744" stroke="#57534e" stroke-width="1.2" marker-end="url(#arr)"/>
+
+  <!-- DECISION DIAMOND - 有歧义? -->
+  <polygon points="440,748 540,786 440,824 340,786" fill="rgba(181,82,58,0.08)" stroke="#b5523a" stroke-width="1.5"/>
+  <text x="440" y="781" font-family="Geist, sans-serif" font-size="10" font-weight="600" fill="#1c1917" text-anchor="middle">发现新表名</text>
+  <text x="440" y="797" font-family="Geist, sans-serif" font-size="10" font-weight="600" fill="#1c1917" text-anchor="middle">与旧表名相近？</text>
+
+  <!-- YES branch (右) - 问用户 -->
+  <line x1="540" y1="786" x2="620" y2="786" stroke="#b5523a" stroke-width="1.5" marker-end="url(#arr-accent)"/>
+  <rect x="546" y="774" width="20" height="14" rx="2" fill="#f2ede4"/>
+  <text x="556" y="784" font-family="Geist Mono, monospace" font-size="8" fill="#b5523a" text-anchor="middle">是</text>
+
+  <!-- Interactive prompt box -->
+  <rect x="620" y="748" width="200" height="76" rx="6" fill="rgba(181,82,58,0.08)" stroke="#b5523a" stroke-width="1.5"/>
+  <text x="720" y="768" font-family="Geist Mono, monospace" font-size="8" fill="#b5523a" letter-spacing="0.12em" text-anchor="middle">INTERACTIVE PROMPT</text>
+  <text x="720" y="784" font-family="Geist, sans-serif" font-size="10" font-weight="600" fill="#1c1917" text-anchor="middle">Is tags table created</text>
+  <text x="720" y="798" font-family="Geist, sans-serif" font-size="10" font-weight="600" fill="#1c1917" text-anchor="middle">or renamed from another?</text>
+  <text x="720" y="815" font-family="Geist Mono, monospace" font-size="8" fill="#57534e" text-anchor="middle">等待用户选择</text>
+
+  <!-- NO branch (下) - 直接处理 -->
+  <line x1="440" y1="824" x2="440" y2="848" stroke="#57534e" stroke-width="1.2" marker-end="url(#arr)"/>
+  <rect x="446" y="826" width="20" height="14" rx="2" fill="#f2ede4"/>
+  <text x="456" y="836" font-family="Geist Mono, monospace" font-size="8" fill="#57534e" text-anchor="middle">否</text>
+
+  <!-- DECISION DIAMOND 2 - 用户选什么? -->
+  <!-- User choice YES = create -->
+  <rect x="580" y="848" width="180" height="44" rx="6" fill="white" stroke="#57534e" stroke-width="1.2" stroke-dasharray="4,3"/>
+  <text x="670" y="866" font-family="Geist, sans-serif" font-size="10" font-weight="600" fill="#1c1917" text-anchor="middle">选 create table</text>
+  <text x="670" y="882" font-family="Geist Mono, monospace" font-size="9" fill="#78716c" text-anchor="middle">↳ 新建 tags 表</text>
+
+  <line x1="720" y1="824" x2="720" y2="848" stroke="#57534e" stroke-width="1.2" marker-end="url(#arr)"/>
+
+  <!-- JOIN MERGE point -->
+  <circle cx="440" cy="918" r="5" fill="#1c1917"/>
+
+  <!-- From NO path -->
+  <line x1="440" y1="852" x2="440" y2="913" stroke="#57534e" stroke-width="1.2"/>
+
+  <!-- From create choice -->
+  <line x1="670" y1="892" x2="670" y2="918" stroke="#57534e" stroke-width="1.2"/>
+  <line x1="670" y1="918" x2="445" y2="918" stroke="#57534e" stroke-width="1.2"/>
+
+  <line x1="440" y1="923" x2="440" y2="945" stroke="#57534e" stroke-width="1.2" marker-end="url(#arr)"/>
+
+  <!-- Final step -->
+  <rect x="330" y="948" width="220" height="52" rx="6" fill="rgba(181,82,58,0.08)" stroke="#b5523a" stroke-width="1.5"/>
+  <text x="440" y="967" font-family="Geist, sans-serif" font-size="11" font-weight="600" fill="#1c1917" text-anchor="middle">执行 Schema 变更</text>
+  <text x="440" y="983" font-family="Geist Mono, monospace" font-size="9" fill="#78716c" text-anchor="middle">CREATE TABLE tags</text>
+  <text x="440" y="997" font-family="Geist Mono, monospace" font-size="9" fill="#78716c" text-anchor="middle">DROP TABLE images_texts / keywords_texts</text>
+
+  <line x1="440" y1="1000" x2="440" y2="1022" stroke="#57534e" stroke-width="1.2" marker-end="url(#arr)"/>
+
+  <!-- END oval -->
+  <ellipse cx="440" cy="1045" rx="100" ry="24" fill="#1c1917"/>
+  <text x="440" y="1050" font-family="Geist, sans-serif" font-size="11" font-weight="600" fill="#faf7f2" text-anchor="middle">Admin Panel 正常加载</text>
+
+  <!-- ═══ LEFT ANNOTATION: what text hasMany produces ═══ -->
+  <!-- Annotation line from images_texts -->
+  <line x1="280" y1="170" x2="320" y2="170" stroke="#78716c" stroke-width="1" stroke-dasharray="3,3"/>
+  <rect x="320" y="160" width="250" height="52" rx="5" fill="rgba(28,25,23,0.04)" stroke="rgba(120,113,108,0.3)" stroke-width="1"/>
+  <text x="330" y="177" font-family="Instrument Serif, serif" font-style="italic" font-size="12" fill="#57534e">text hasMany → 辅助表</text>
+  <text x="330" y="193" font-family="Geist Mono, monospace" font-size="9" fill="#78716c">每条文本值存一行，</text>
+  <text x="330" y="206" font-family="Geist Mono, monospace" font-size="9" fill="#78716c">无 schema 约束，无 UI 补全</text>
+
+  <!-- ═══ RIGHT ANNOTATION: what relationship produces ═══ -->
+  <line x1="680" y1="185" x2="720" y2="185" stroke="#78716c" stroke-width="1" stroke-dasharray="3,3"/>
+  <rect x="720" y="158" width="148" height="66" rx="5" fill="rgba(28,25,23,0.04)" stroke="rgba(120,113,108,0.3)" stroke-width="1"/>
+  <text x="730" y="177" font-family="Instrument Serif, serif" font-style="italic" font-size="12" fill="#57534e">relationship → 关联表</text>
+  <text x="730" y="193" font-family="Geist Mono, monospace" font-size="9" fill="#78716c">images_rels</text>
+  <text x="730" y="207" font-family="Geist Mono, monospace" font-size="9" fill="#78716c">image_id | tag_id</text>
+  <text x="730" y="219" font-family="Geist Mono, monospace" font-size="9" fill="#78716c">有 UI 搜索 + 补全</text>
+
+</svg>
+
+<div class="legend">
+  <div class="legend-item">
+    <div class="legend-swatch" style="background:white; border:1.2px solid #1c1917;"></div>
+    普通步骤 / Collection
+  </div>
+  <div class="legend-item">
+    <div class="legend-swatch" style="background:rgba(181,82,58,0.08); border:1.5px solid #b5523a;"></div>
+    关键节点 / 新增内容
+  </div>
+  <div class="legend-item">
+    <div class="legend-swatch" style="background:rgba(28,25,23,0.05); border:1px dashed #78716c;"></div>
+    数据库辅助表（自动生成）
+  </div>
+  <div class="legend-item">
+    <div class="legend-swatch" style="background: linear-gradient(90deg, #2563eb 0%, #2563eb 100%); opacity:0.7;"></div>
+    relationship 外键连接
+  </div>
+</div>
+
+<div class="callout-box">
+  <p>
+    <strong>为什么出现交互提示？</strong><br>
+    Payload 检测到旧库有 <code style="font-style:normal;font-family:Geist Mono,monospace;font-size:11px;">images_texts</code> 和 <code style="font-style:normal;font-family:Geist Mono,monospace;font-size:11px;">keywords_texts</code>，新 Schema 里出现了 <code style="font-style:normal;font-family:Geist Mono,monospace;font-size:11px;">tags</code> 表——它无法自动判断是"新建"还是"从旧表改名"（两者名字差太多）。选 <strong>create table</strong> 后，旧辅助表会被 DROP，新 tags 表被 CREATE，关联表 images_rels / keywords_rels 被建立，全部完成。
+  </p>
+</div>
+
+</div>
+</body>
+</html>

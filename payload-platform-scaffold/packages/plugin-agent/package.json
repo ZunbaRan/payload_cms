@@ -6,7 +6,12 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./admin/AgentTaskRunButton": "./src/admin/AgentTaskRunButton.tsx"
+    "./admin/AgentTaskRunButton": "./src/admin/AgentTaskRunButton.tsx",
+    "./admin/AiTaskFieldButton": "./src/admin/AiTaskFieldButton.tsx",
+    "./admin/AiTaskTextareaField": "./src/admin/AiTaskTextareaField.tsx",
+    "./admin/BoundAgentTasksPanel": "./src/admin/BoundAgentTasksPanel.tsx",
+    "./admin/BoundCollectionSelectField": "./src/admin/BoundCollectionSelectField.tsx",
+    "./admin/FieldPathSelectField": "./src/admin/FieldPathSelectField.tsx"
   },
   "dependencies": {
     "@scaffold/shared": "workspace:*",

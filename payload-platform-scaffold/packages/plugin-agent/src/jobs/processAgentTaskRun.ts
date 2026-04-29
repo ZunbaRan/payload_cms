@@ -404,9 +404,11 @@ export const processAgentTaskRun: TaskConfig<'processAgentTaskRun'> = {
 
     const finishedAt = new Date()
 
-    // 如果绑定了 KB → 把 finalOutput 当作绝对路径，读文件回写 KB.rawContent
+    // 文件输出模式（outputMode=file 或绑定了 KB）：把 agent 返回的路径读成内容，
+    // 替换到 finalOutput 里，让上层调用方（Panel / KB / API）拿到文本即可。
     let kbWriteMessage: string | undefined
-    if (linkedKbId) {
+    const wantsFileNow = task.outputMode === 'file' || Boolean(linkedKbId)
+    if (wantsFileNow) {
       try {
         // 解析 agent 返回的路径：取最后一行非空文本，去掉常见包裹（反引号/引号/markdown 代码块）
         const lines = (finalOutput || '')
@@ -415,28 +417,54 @@ export const processAgentTaskRun: TaskConfig<'processAgentTaskRun'> = {
           .filter((l) => l && !l.startsWith('```'))
         let candidate = lines[lines.length - 1] || ''
         candidate = candidate.replace(/^[`'"]+|[`'"]+$/g, '').trim()
-        if (!candidate) throw new Error(`agent 没有返回任何路径，finalOutput=${JSON.stringify(finalOutput)}`)
-        // 相对路径按 runRoot 解析
-        const abs = path.isAbsolute(candidate) ? path.resolve(candidate) : path.resolve(runRoot, candidate)
-        // 安全：限制必须在 .geoflow-data/agent-runs 目录树内
+
+        // 兜底：如果 agent 没规规矩矩返回路径（比如直接返回了内容），
+        // 也尝试默认的 ./workspace/output.md
+        const defaultOut = path.join(runRoot, 'workspace', 'output.md')
+        let abs: string
         const allowedRoot = path.resolve(process.cwd(), '.geoflow-data')
-        if (!abs.startsWith(allowedRoot)) {
-          throw new Error(`agent 返回的路径不在允许目录内：${abs}（解析前: ${candidate}）`)
+
+        const tryAbs = candidate
+          ? path.isAbsolute(candidate)
+            ? path.resolve(candidate)
+            : path.resolve(runRoot, candidate)
+          : ''
+
+        if (tryAbs && tryAbs.startsWith(allowedRoot) && existsSync(tryAbs)) {
+          abs = tryAbs
+        } else if (existsSync(defaultOut)) {
+          // agent 返回的不是路径但默认文件存在 → 用默认文件
+          abs = defaultOut
+          payload.logger?.warn?.(
+            `agent 返回的不是合法路径，回退到默认 ${defaultOut}（agent finalOutput="${candidate}"）`,
+          )
+        } else {
+          throw new Error(
+            `agent 没有返回合法路径且默认文件不存在 (${defaultOut})。finalOutput=${JSON.stringify(
+              finalOutput,
+            )}`,
+          )
         }
-        if (!existsSync(abs)) throw new Error(`agent 返回的文件不存在：${abs}（解析前: ${candidate}）`)
+
         const content = await fs.readFile(abs, 'utf-8')
-        await payload.update({
-          collection: 'knowledge-bases',
-          id: linkedKbId,
-          data: { rawContent: content, syncStatus: 'pending' } as never,
-          depth: 0,
-          overrideAccess: true,
-          // 走 hook 也行，但这里直接 skip 防止重复 update
-          context: { skipChunk: true },
-        })
-        kbWriteMessage = `已写入 KB.rawContent（${content.length} 字符），可点「📚 开始索引」继续`
+
+        // 把文件内容覆盖到 finalOutput，后续所有调用方（KB 回写、Panel UI）统一只看 finalOutput
+        finalOutput = content
+
+        // 兼容老逻辑：linkedKbId 仍然直接更新 KB.rawContent
+        if (linkedKbId) {
+          await payload.update({
+            collection: 'knowledge-bases',
+            id: linkedKbId,
+            data: { rawContent: content, syncStatus: 'pending' } as never,
+            depth: 0,
+            overrideAccess: true,
+            context: { skipChunk: true },
+          })
+          kbWriteMessage = `已写入 KB.rawContent（${content.length} 字符），可点「📚 开始索引」继续`
+        }
       } catch (e) {
-        kbWriteMessage = `KB 回写失败：${(e as Error).message}`
+        kbWriteMessage = `文件回读失败：${(e as Error).message}`
         payload.logger?.warn?.(kbWriteMessage)
         if (input.kbIndexRunId) {
           await payload.update({

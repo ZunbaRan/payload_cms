@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Prompt 拼接流程 — AI Task 变量注入原理</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #020617;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 40px 32px;
+    color: #e2e8f0;
+    min-height: 100vh;
+  }
+  .header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .pulse {
+    width: 10px; height: 10px;
+    background: #fbbf24;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+  h1 { font-size: 1.3rem; font-weight: 700; color: #f1f5f9; }
+  .subtitle { font-size: 11px; color: #64748b; margin-bottom: 28px; margin-left: 22px; }
+
+  .diagram-card {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+  .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 10px; padding: 20px; }
+  .card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .card-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .card h3 { font-size: 11px; font-weight: 700; color: #f1f5f9; }
+  .card ul { list-style: none; }
+  .card ul li { font-size: 10px; color: #94a3b8; padding: 3px 0; line-height: 1.6; }
+  .card code { font-family: inherit; color: #fbbf24; }
+
+  footer { font-size: 9px; color: #334155; text-align: center; letter-spacing: 0.1em; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="pulse"></div>
+  <h1>Prompt 拼接全流程 — {{变量}} 如何注入业务字段</h1>
+</div>
+<p class="subtitle">Admin UI 配置 → 运行时变量合并 → renderTemplate → AI 接收最终 prompt</p>
+
+<div class="diagram-card">
+<svg viewBox="0 0 1040 1100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+    </pattern>
+    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0,10 3.5,0 7" fill="#64748b"/>
+    </marker>
+    <marker id="arr-amber" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0,10 3.5,0 7" fill="#fbbf24"/>
+    </marker>
+    <marker id="arr-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0,10 3.5,0 7" fill="#34d399"/>
+    </marker>
+    <marker id="arr-cyan" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0,10 3.5,0 7" fill="#22d3ee"/>
+    </marker>
+    <marker id="arr-violet" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0,10 3.5,0 7" fill="#a78bfa"/>
+    </marker>
+    <marker id="arr-rose" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0,10 3.5,0 7" fill="#fb7185"/>
+    </marker>
+  </defs>
+
+  <rect width="1040" height="1100" fill="#0f172a"/>
+  <rect width="1040" height="1100" fill="url(#grid)"/>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!--  PHASE 1: Admin UI 配置阶段（上方）                -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <text x="520" y="26" font-family="JetBrains Mono" font-size="8" fill="#334155" letter-spacing="0.18em" text-anchor="middle">PHASE 1 — ADMIN UI 配置阶段（一次性）</text>
+
+  <!-- Cluster boundary -->
+  <rect x="20" y="34" width="1000" height="290" rx="10" fill="none" stroke="#1e3a5f" stroke-width="1" stroke-dasharray="8,4"/>
+
+  <!-- ── Agent Task 配置文档 ── -->
+  <rect x="40" y="50" width="300" height="260" rx="8" fill="#0f172a"/>
+  <rect x="40" y="50" width="300" height="260" rx="8" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="190" y="72" font-family="JetBrains Mono" font-size="10" font-weight="700" fill="white" text-anchor="middle">Agent Task 配置文档</text>
+  <text x="190" y="88" font-family="JetBrains Mono" font-size="8" fill="#64748b" text-anchor="middle">admin/collections/agent-tasks/new</text>
+
+  <!-- name field -->
+  <rect x="56" y="98" width="268" height="22" rx="3" fill="rgba(8,51,68,0.5)" stroke="#22d3ee" stroke-width="0.8"/>
+  <text x="68" y="113" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">name:</text>
+  <text x="120" y="113" font-family="JetBrains Mono" font-size="8" fill="white">"为文章生成摘要"</text>
+
+  <!-- slug field -->
+  <rect x="56" y="126" width="268" height="22" rx="3" fill="rgba(8,51,68,0.5)" stroke="#22d3ee" stroke-width="0.8"/>
+  <text x="68" y="141" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">slug:</text>
+  <text x="120" y="141" font-family="JetBrains Mono" font-size="8" fill="#22d3ee">"generate-excerpt"</text>
+
+  <!-- prompt field - FOCAL -->
+  <rect x="56" y="154" width="268" height="72" rx="3" fill="rgba(120,53,15,0.35)" stroke="#fbbf24" stroke-width="1.2"/>
+  <text x="68" y="170" font-family="JetBrains Mono" font-size="8" fill="#fbbf24">prompt（任务提示词）:</text>
+  <text x="68" y="186" font-family="JetBrains Mono" font-size="8" fill="white">"你是一个SEO专家。</text>
+  <text x="68" y="200" font-family="JetBrains Mono" font-size="8" fill="#34d399">  请为标题「{{title}}」</text>
+  <text x="68" y="214" font-family="JetBrains Mono" font-size="8" fill="#34d399">  结合关键词[{{keywords}}]</text>
+  <text x="68" y="228" font-family="JetBrains Mono" font-size="8" fill="white">  写一段200字摘要。"</text>
+
+  <!-- variables array -->
+  <rect x="56" y="232" width="268" height="66" rx="3" fill="rgba(76,29,149,0.3)" stroke="#a78bfa" stroke-width="0.8"/>
+  <text x="68" y="248" font-family="JetBrains Mono" font-size="8" fill="#a78bfa">variables（输入变量声明）:</text>
+  <text x="68" y="264" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">  key: "title"     defaultValue: ""</text>
+  <text x="68" y="278" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">  key: "keywords"  defaultValue: "电子签"</text>
+  <text x="68" y="292" font-family="JetBrains Mono" font-size="8" fill="#64748b">  （声明 = 让调用方知道该传什么）</text>
+
+  <!-- ── renderTemplate 函数 ── -->
+  <rect x="380" y="60" width="280" height="120" rx="8" fill="#0f172a"/>
+  <rect x="380" y="60" width="280" height="120" rx="8" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="520" y="80" font-family="JetBrains Mono" font-size="10" font-weight="700" fill="white" text-anchor="middle">renderTemplate()  /  applyTemplate()</text>
+  <text x="520" y="96" font-family="JetBrains Mono" font-size="8" fill="#64748b" text-anchor="middle">packages/shared/src/template.ts</text>
+  <text x="394" y="116" font-family="JetBrains Mono" font-size="9" fill="#fbbf24">template.replace(</text>
+  <text x="394" y="132" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">  /\{\{\s*([\w.-]+)\s*\}\}/g,</text>
+  <text x="394" y="148" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">  (_, key) =&gt; vars[key] ?? ''</text>
+  <text x="394" y="164" font-family="JetBrains Mono" font-size="9" fill="#fbbf24">)</text>
+
+  <!-- ── variables 合并逻辑 ── -->
+  <rect x="380" y="196" width="280" height="116" rx="8" fill="#0f172a"/>
+  <rect x="380" y="196" width="280" height="116" rx="8" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="520" y="216" font-family="JetBrains Mono" font-size="10" font-weight="700" fill="white" text-anchor="middle">变量合并优先级</text>
+  <text x="394" y="236" font-family="JetBrains Mono" font-size="8" fill="#a78bfa">① task.variables[].defaultValue</text>
+  <text x="394" y="252" font-family="JetBrains Mono" font-size="8" fill="#64748b">    → 兜底值，Admin 配置时填</text>
+  <text x="394" y="272" font-family="JetBrains Mono" font-size="8" fill="#34d399">② runInputs（调用 /run 传入的 inputs:{}）</text>
+  <text x="394" y="288" font-family="JetBrains Mono" font-size="8" fill="#64748b">    → 运行时覆盖，优先级最高</text>
+  <text x="394" y="304" font-family="JetBrains Mono" font-size="8" fill="#fb7185">    Object.assign(mergedVars, runInputs)</text>
+
+  <!-- ── AI Model 配置 ── -->
+  <rect x="700" y="50" width="300" height="260" rx="8" fill="#0f172a"/>
+  <rect x="700" y="50" width="300" height="260" rx="8" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="850" y="72" font-family="JetBrains Mono" font-size="10" font-weight="700" fill="white" text-anchor="middle">AI Model 配置（关联）</text>
+  <text x="850" y="88" font-family="JetBrains Mono" font-size="8" fill="#64748b" text-anchor="middle">aiModel → ai-models collection</text>
+
+  <rect x="716" y="98" width="268" height="22" rx="3" fill="rgba(6,78,59,0.5)" stroke="#34d399" stroke-width="0.8"/>
+  <text x="728" y="113" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">provider:</text>
+  <text x="790" y="113" font-family="JetBrains Mono" font-size="8" fill="white">"openai"</text>
+
+  <rect x="716" y="126" width="268" height="22" rx="3" fill="rgba(6,78,59,0.5)" stroke="#34d399" stroke-width="0.8"/>
+  <text x="728" y="141" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">modelId:</text>
+  <text x="790" y="141" font-family="JetBrains Mono" font-size="8" fill="white">"gpt-4o"</text>
+
+  <rect x="716" y="154" width="268" height="22" rx="3" fill="rgba(6,78,59,0.5)" stroke="#34d399" stroke-width="0.8"/>
+  <text x="728" y="169" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">apiKey:</text>
+  <text x="790" y="169" font-family="JetBrains Mono" font-size="8" fill="white">"sk-…"（加密存储）</text>
+
+  <rect x="716" y="182" width="128" height="22" rx="3" fill="rgba(6,78,59,0.3)" stroke="#34d399" stroke-width="0.8"/>
+  <text x="728" y="197" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">temperature: 0.7</text>
+
+  <rect x="856" y="182" width="128" height="22" rx="3" fill="rgba(6,78,59,0.3)" stroke="#34d399" stroke-width="0.8"/>
+  <text x="868" y="197" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">maxTokens: 4096</text>
+
+  <!-- Skills -->
+  <rect x="716" y="214" width="268" height="80" rx="3" fill="rgba(6,78,59,0.3)" stroke="#34d399" stroke-width="0.8"/>
+  <text x="728" y="230" font-family="JetBrains Mono" font-size="8" fill="#34d399">skills（关联 agent-skills）:</text>
+  <text x="728" y="248" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">  slug: "web-search" → 搜索能力</text>
+  <text x="728" y="264" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">  slug: "read-url"   → 抓页能力</text>
+  <text x="728" y="280" font-family="JetBrains Mono" font-size="8" fill="#64748b">  以 slug 引用，不依赖数字ID</text>
+
+  <!-- Arrows between boxes in Phase 1 -->
+  <line x1="340" y1="155" x2="378" y2="130" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arr-amber)"/>
+  <rect x="342" y="138" width="26" height="12" rx="2" fill="#0f172a"/>
+  <text x="355" y="147" font-family="JetBrains Mono" font-size="7" fill="#fbbf24" text-anchor="middle">注入</text>
+
+  <line x1="340" y1="270" x2="378" y2="260" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arr-violet)"/>
+
+  <line x1="660" y1="120" x2="698" y2="120" stroke="#34d399" stroke-width="1.5" marker-end="url(#arr-green)"/>
+  <rect x="662" y="108" width="32" height="12" rx="2" fill="#0f172a"/>
+  <text x="678" y="117" font-family="JetBrains Mono" font-size="7" fill="#34d399" text-anchor="middle">调用</text>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!--  PHASE 2: 运行时触发（中间层）                     -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <text x="520" y="352" font-family="JetBrains Mono" font-size="8" fill="#334155" letter-spacing="0.18em" text-anchor="middle">PHASE 2 — 运行时触发（每次执行）</text>
+
+  <!-- HTTP Request -->
+  <rect x="20" y="362" width="340" height="120" rx="8" fill="#0f172a"/>
+  <rect x="20" y="362" width="340" height="120" rx="8" fill="rgba(30,41,59,0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="190" y="382" font-family="JetBrains Mono" font-size="10" font-weight="700" fill="white" text-anchor="middle">HTTP 请求（POST /run）</text>
+
+  <rect x="36" y="392" width="308" height="22" rx="3" fill="rgba(30,41,59,0.7)" stroke="#94a3b8" stroke-width="0.8"/>
+  <text x="48" y="407" font-family="JetBrains Mono" font-size="8" fill="#22d3ee">POST /api/agent-tasks/generate-excerpt/run</text>
+
+  <rect x="36" y="420" width="308" height="50" rx="3" fill="rgba(30,41,59,0.4)" stroke="#64748b" stroke-width="0.8"/>
+  <text x="48" y="436" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">Body: {</text>
+  <text x="48" y="452" font-family="JetBrains Mono" font-size="8" fill="#34d399">  inputs: { title: "电子签合规指南",</text>
+  <text x="48" y="466" font-family="JetBrains Mono" font-size="8" fill="#34d399">           keywords: "合规,SaaS,电子签" }</text>
+
+  <!-- Arrow right to lookup -->
+  <line x1="360" y1="422" x2="398" y2="422" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Slug Lookup -->
+  <rect x="398" y="382" width="240" height="100" rx="8" fill="#0f172a"/>
+  <rect x="398" y="382" width="240" height="100" rx="8" fill="rgba(136,19,55,0.25)" stroke="#fb7185" stroke-width="1.5"/>
+  <text x="518" y="402" font-family="JetBrains Mono" font-size="10" font-weight="700" fill="white" text-anchor="middle">slug 查找 task</text>
+  <text x="518" y="420" font-family="JetBrains Mono" font-size="8" fill="#64748b" text-anchor="middle">runAgentTaskEndpoint</text>
+  <text x="414" y="440" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">① findByID('generate-excerpt') → 404</text>
+  <text x="414" y="458" font-family="JetBrains Mono" font-size="8" fill="#fb7185">② findBySlug → task.id = 3 ✓</text>
+  <text x="414" y="474" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">   create agent-task-runs(queued)</text>
+
+  <!-- Arrow right to Queue -->
+  <line x1="638" y1="432" x2="676" y2="432" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Job Queue -->
+  <rect x="676" y="402" width="340" height="30" rx="4" fill="rgba(251,146,60,0.3)" stroke="#fb923c" stroke-width="1"/>
+  <text x="846" y="422" font-family="JetBrains Mono" font-size="8" font-weight="600" fill="#fb923c" text-anchor="middle">Payload Jobs Queue  →  processAgentTaskRun</text>
+
+  <!-- Arrow down from queue -->
+  <line x1="846" y1="432" x2="846" y2="464" stroke="#fb923c" stroke-width="1.5" marker-end="url(#arr-amber)"/>
+  <rect x="716" y="462" width="260" height="22" rx="3" fill="rgba(251,146,60,0.2)" stroke="#fb923c" stroke-width="0.8"/>
+  <text x="846" y="477" font-family="JetBrains Mono" font-size="8" fill="#fb923c" text-anchor="middle">input: { agentTaskId:"3", agentTaskRunId:"7" }</text>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!--  PHASE 3: Prompt 拼装（核心区域）                  -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <text x="520" y="514" font-family="JetBrains Mono" font-size="8" fill="#334155" letter-spacing="0.18em" text-anchor="middle">PHASE 3 — PROMPT 拼装详细流程（processAgentTaskRun handler）</text>
+
+  <!-- Outer boundary -->
+  <rect x="20" y="524" width="1000" height="400" rx="10" fill="none" stroke="#2d1b00" stroke-width="1.5" stroke-dasharray="8,4"/>
+  <text x="40" y="542" font-family="JetBrains Mono" font-size="8" fill="#fbbf24" letter-spacing="0.12em">processAgentTaskRun — JOB HANDLER</text>
+
+  <!-- Step 1: Load task + run -->
+  <rect x="40" y="552" width="220" height="80" rx="6" fill="#0f172a"/>
+  <rect x="40" y="552" width="220" height="80" rx="6" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.2"/>
+  <text x="150" y="570" font-family="JetBrains Mono" font-size="9" font-weight="600" fill="white" text-anchor="middle">Step 1: 加载数据</text>
+  <text x="56" y="588" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">task = findByID(agentTaskId, depth:2)</text>
+  <text x="56" y="604" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">  depth:2 → skills/aiModel 也展开</text>
+  <text x="56" y="620" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">taskRun = findByID(agentTaskRunId)</text>
+
+  <!-- Arrow right -->
+  <line x1="260" y1="592" x2="296" y2="592" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arr-amber)"/>
+
+  <!-- Step 2: Build mergedVars -->
+  <rect x="296" y="552" width="240" height="80" rx="6" fill="#0f172a"/>
+  <rect x="296" y="552" width="240" height="80" rx="6" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="416" y="570" font-family="JetBrains Mono" font-size="9" font-weight="600" fill="white" text-anchor="middle">Step 2: 合并变量</text>
+  <text x="312" y="588" font-family="JetBrains Mono" font-size="8" fill="#a78bfa">mergedVars = {}</text>
+  <text x="312" y="604" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">for v in task.variables:</text>
+  <text x="312" y="618" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">  mergedVars[v.key] = v.defaultValue</text>
+
+  <!-- Arrow right -->
+  <line x1="536" y1="592" x2="572" y2="592" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arr-violet)"/>
+
+  <!-- Step 3: Override with runInputs -->
+  <rect x="572" y="552" width="240" height="80" rx="6" fill="#0f172a"/>
+  <rect x="572" y="552" width="240" height="80" rx="6" fill="rgba(76,29,149,0.5)" stroke="#a78bfa" stroke-width="2"/>
+  <text x="692" y="570" font-family="JetBrains Mono" font-size="9" font-weight="700" fill="white" text-anchor="middle">Step 3: 运行时覆盖 ★</text>
+  <text x="588" y="588" font-family="JetBrains Mono" font-size="8" fill="#34d399">runInputs = taskRun.inputs</text>
+  <text x="588" y="604" font-family="JetBrains Mono" font-size="8" fill="#34d399">Object.assign(mergedVars, runInputs)</text>
+  <text x="588" y="620" font-family="JetBrains Mono" font-size="8" fill="#fb7185">// runInputs 覆盖 defaultValue ！</text>
+
+  <!-- Arrow right -->
+  <line x1="812" y1="592" x2="848" y2="592" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arr-violet)"/>
+
+  <!-- Step 4: applyTemplate -->
+  <rect x="848" y="552" width="152" height="80" rx="6" fill="#0f172a"/>
+  <rect x="848" y="552" width="152" height="80" rx="6" fill="rgba(120,53,15,0.5)" stroke="#fbbf24" stroke-width="2"/>
+  <text x="924" y="570" font-family="JetBrains Mono" font-size="9" font-weight="700" fill="white" text-anchor="middle">Step 4: 渲染</text>
+  <text x="860" y="588" font-family="JetBrains Mono" font-size="8" fill="#fbbf24">applyTemplate(</text>
+  <text x="860" y="604" font-family="JetBrains Mono" font-size="8" fill="#fbbf24">  task.prompt,</text>
+  <text x="860" y="618" font-family="JetBrains Mono" font-size="8" fill="#fbbf24">  mergedVars)</text>
+
+  <!-- ────── BEFORE / AFTER 对比（下方）────── -->
+  <text x="520" y="658" font-family="JetBrains Mono" font-size="8" fill="#334155" letter-spacing="0.14em" text-anchor="middle">BEFORE → AFTER 变量替换示例</text>
+
+  <!-- BEFORE box -->
+  <rect x="40" y="668" width="450" height="100" rx="6" fill="#0f172a"/>
+  <rect x="40" y="668" width="450" height="100" rx="6" fill="rgba(30,41,59,0.5)" stroke="#64748b" stroke-width="1.2"/>
+  <text x="56" y="686" font-family="JetBrains Mono" font-size="8" fill="#64748b">BEFORE（task.prompt 原始模板）</text>
+  <text x="56" y="704" font-family="JetBrains Mono" font-size="8" fill="white">"你是SEO专家。请为标题</text>
+  <text x="56" y="720" font-family="JetBrains Mono" font-size="9" fill="#a78bfa">「{{title}}」</text>
+  <text x="56" y="736" font-family="JetBrains Mono" font-size="8" fill="white">  结合关键词</text>
+  <text x="56" y="752" font-family="JetBrains Mono" font-size="9" fill="#a78bfa">[{{keywords}}]</text>
+  <text x="160" y="752" font-family="JetBrains Mono" font-size="8" fill="white">写200字摘要。"</text>
+
+  <!-- Arrow -->
+  <line x1="490" y1="718" x2="528" y2="718" stroke="#fbbf24" stroke-width="2" marker-end="url(#arr-amber)"/>
+  <rect x="492" y="706" width="34" height="14" rx="2" fill="#0f172a"/>
+  <text x="509" y="716" font-family="JetBrains Mono" font-size="7" fill="#fbbf24" text-anchor="middle">渲染</text>
+
+  <!-- AFTER box -->
+  <rect x="528" y="668" width="472" height="100" rx="6" fill="#0f172a"/>
+  <rect x="528" y="668" width="472" height="100" rx="6" fill="rgba(120,53,15,0.35)" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="544" y="686" font-family="JetBrains Mono" font-size="8" fill="#fbbf24">AFTER（effectivePrompt 发给 AI）</text>
+  <text x="544" y="704" font-family="JetBrains Mono" font-size="8" fill="white">"你是SEO专家。请为标题</text>
+  <text x="544" y="720" font-family="JetBrains Mono" font-size="9" fill="#34d399">「电子签合规指南」</text>
+  <text x="544" y="736" font-family="JetBrains Mono" font-size="8" fill="white">  结合关键词</text>
+  <text x="544" y="752" font-family="JetBrains Mono" font-size="9" fill="#34d399">[合规, SaaS, 电子签]</text>
+  <text x="690" y="752" font-family="JetBrains Mono" font-size="8" fill="white">写200字摘要。"</text>
+
+  <!-- Step 5: Skills + Agent loop -->
+  <rect x="40" y="784" width="450" height="124" rx="6" fill="#0f172a"/>
+  <rect x="40" y="784" width="450" height="124" rx="6" fill="rgba(6,78,59,0.35)" stroke="#34d399" stroke-width="1.2"/>
+  <text x="265" y="802" font-family="JetBrains Mono" font-size="9" font-weight="600" fill="white" text-anchor="middle">Step 5: 准备 Skills + 启动 Agent Loop</text>
+  <text x="56" y="820" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">• 把 task.skills 里的 skill 目录复制到</text>
+  <text x="56" y="836" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">  .geoflow-data/agent-runs/{runId}/skills/</text>
+  <text x="56" y="854" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">• 创建 hostBashSandbox(cwd=runRoot)</text>
+  <text x="56" y="870" font-family="JetBrains Mono" font-size="8" fill="#34d399">• ToolLoopAgent.generate(effectivePrompt)</text>
+  <text x="56" y="886" font-family="JetBrains Mono" font-size="8" fill="#64748b">  agent 自主决定调用 bash / skills，每步骤存 steps[]</text>
+  <text x="56" y="900" font-family="JetBrains Mono" font-size="8" fill="#64748b">  直到达到 finalOutput 或 maxSteps</text>
+
+  <!-- Step 6: finalOutput -->
+  <rect x="528" y="784" width="472" height="124" rx="6" fill="#0f172a"/>
+  <rect x="528" y="784" width="472" height="124" rx="6" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="764" y="802" font-family="JetBrains Mono" font-size="9" font-weight="600" fill="white" text-anchor="middle">Step 6: 写回结果</text>
+  <text x="544" y="820" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">agent-task-runs.update({</text>
+  <text x="544" y="836" font-family="JetBrains Mono" font-size="8" fill="#a78bfa">  status: "success",</text>
+  <text x="544" y="852" font-family="JetBrains Mono" font-size="8" fill="#a78bfa">  finalOutput: "…AI 生成的摘要文字…",</text>
+  <text x="544" y="868" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">  steps: [ { tool:"bash", input, output }, … ],</text>
+  <text x="544" y="884" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">  totalTokens: 1204,</text>
+  <text x="544" y="900" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">})</text>
+
+  <!-- Arrows between step 5 and 6 -->
+  <line x1="490" y1="846" x2="526" y2="846" stroke="#64748b" stroke-width="1.2" marker-end="url(#arr)"/>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!--  BONUS: processTaskRun 对比（底部）                -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <text x="520" y="950" font-family="JetBrains Mono" font-size="8" fill="#334155" letter-spacing="0.18em" text-anchor="middle">BONUS — processTaskRun（内容任务）的变量来源对比</text>
+
+  <rect x="20" y="958" width="1000" height="110" rx="10" fill="none" stroke="#1e3a5f" stroke-width="1" stroke-dasharray="6,4"/>
+
+  <!-- three sources -->
+  <rect x="36" y="970" width="296" height="88" rx="6" fill="rgba(8,51,68,0.3)" stroke="#22d3ee" stroke-width="1"/>
+  <text x="184" y="988" font-family="JetBrains Mono" font-size="9" font-weight="600" fill="#22d3ee" text-anchor="middle">素材库（titleLibrary）</text>
+  <text x="52" y="1006" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">find({collection:'titles',</text>
+  <text x="52" y="1022" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">  where:{status:equals:'pending'},limit:1})</text>
+  <text x="52" y="1038" font-family="JetBrains Mono" font-size="8" fill="#34d399">→ {{title}} = titleDoc.text</text>
+  <text x="52" y="1052" font-family="JetBrains Mono" font-size="8" fill="#64748b">  用完后 title.status → "used"</text>
+
+  <rect x="362" y="970" width="296" height="88" rx="6" fill="rgba(8,51,68,0.3)" stroke="#22d3ee" stroke-width="1"/>
+  <text x="510" y="988" font-family="JetBrains Mono" font-size="9" font-weight="600" fill="#22d3ee" text-anchor="middle">素材库（keywordLibrary）</text>
+  <text x="378" y="1006" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">find({collection:'keywords',</text>
+  <text x="378" y="1022" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">  where:{library:equals:id}, limit:8})</text>
+  <text x="378" y="1038" font-family="JetBrains Mono" font-size="8" fill="#34d399">→ {{keywords}} = kws.join(', ')</text>
+  <text x="378" y="1052" font-family="JetBrains Mono" font-size="8" fill="#64748b">  随机采样8条</text>
+
+  <rect x="688" y="970" width="316" height="88" rx="6" fill="rgba(8,51,68,0.3)" stroke="#22d3ee" stroke-width="1"/>
+  <text x="846" y="988" font-family="JetBrains Mono" font-size="9" font-weight="600" fill="#22d3ee" text-anchor="middle">任务本身配置</text>
+  <text x="704" y="1006" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">task.category.name</text>
+  <text x="704" y="1022" font-family="JetBrains Mono" font-size="8" fill="#34d399">→ {{category}} = "品牌营销"</text>
+  <text x="704" y="1038" font-family="JetBrains Mono" font-size="8" fill="#94a3b8">task.authors[] 随机选一个作者</text>
+  <text x="704" y="1052" font-family="JetBrains Mono" font-size="8" fill="#64748b">  → 写入 article.author</text>
+
+  <!-- Legend -->
+  <rect x="20" y="1076" width="1000" height="18" rx="3" fill="none"/>
+  <text x="520" y="1090" font-family="JetBrains Mono" font-size="8" fill="#334155" text-anchor="middle" letter-spacing="0.12em">
+    processAgentTask = agent自主决策loop  ·  processTaskRun = 固定pipeline生成文章  ·  两者都用 {{key}} 注入业务数据
+  </text>
+</svg>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-dot" style="background:#a78bfa"></div>
+      <h3>变量声明 vs 传入</h3>
+    </div>
+    <ul>
+      <li>• Admin UI 里的 <code>variables[]</code> 是声明：告诉调用方"我需要哪些变量"</li>
+      <li>• 每条变量有 <code>key + defaultValue</code></li>
+      <li>• 调用 <code>/run</code> 时通过 <code>inputs:{}</code> 覆盖默认值</li>
+      <li>• <code>Object.assign(mergedVars, runInputs)</code> 运行时值优先</li>
+      <li>• 没传的变量用 defaultValue，都没有则空字符串</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-dot" style="background:#fbbf24"></div>
+      <h3>{{变量}} 替换规则</h3>
+    </div>
+    <ul>
+      <li>• 正则：<code>/\{\{\s*([\w.-]+)\s*\}\}/g</code></li>
+      <li>• <code>{{title}}</code> → mergedVars["title"] 的值</li>
+      <li>• 未声明的变量 → 保留原文 <code>{{xxx}}</code> 不替换</li>
+      <li>• 值为 null/undefined → 替换为空字符串 <code>""</code></li>
+      <li>• 支持嵌套词：<code>{{article.title}}</code> 也可以</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-dot" style="background:#34d399"></div>
+      <h3>两种 Task 的差异</h3>
+    </div>
+    <ul>
+      <li>• <code>processAgentTaskRun</code>：变量全靠调用方 inputs 传入</li>
+      <li>• <code>processTaskRun</code>：变量从素材库自动抓取（title/keywords/category）</li>
+      <li>• AgentTask 更灵活：agent 自主调用 skill/bash</li>
+      <li>• ContentTask 更固定：固定 pipeline 生成文章存库</li>
+      <li>• 两者最终都调 <code>ai.generate({systemPrompt, userPrompt})</code></li>
+    </ul>
+  </div>
+</div>
+
+<footer>
+  packages/shared/src/template.ts · plugin-agent/processAgentTaskRun · plugin-tasks/processTaskRun
+</footer>
+
+</body>
+</html>

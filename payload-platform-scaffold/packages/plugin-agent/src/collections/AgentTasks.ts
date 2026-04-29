@@ -35,6 +35,40 @@ export const AgentTasks: CollectionConfig = {
   fields: [
     { name: 'name', type: 'text', required: true, label: '任务名' },
     {
+      name: 'slug',
+      type: 'text',
+      unique: true,
+      label: 'Slug',
+      admin: {
+        description: '稳定调用标识。业务字段按钮建议用 slug 调用，避免硬编码数据库 ID。',
+      },
+    },
+    {
+      name: 'boundCollection',
+      type: 'text',
+      label: '绑定到集合',
+      admin: {
+        description:
+          '可选。绑定后，目标集合的编辑页会自动出现"运行此任务"按钮，并按下方变量映射从当前文档抽值。留空则只能用 API 手动调用。',
+        components: {
+          Field: '@scaffold/plugin-agent/admin/BoundCollectionSelectField#default',
+        },
+      },
+    },
+    {
+      name: 'targetFieldPath',
+      type: 'text',
+      label: '结果写入字段',
+      admin: {
+        description:
+          '可选。AI 返回的 finalOutput 自动回写到目标集合的此字段（如 excerpt）。留空则只显示结果，不回写。',
+        condition: (data) => Boolean(data?.boundCollection),
+        components: {
+          Field: '@scaffold/plugin-agent/admin/FieldPathSelectField#default',
+        },
+      },
+    },
+    {
       name: 'prompt',
       type: 'textarea',
       required: true,
@@ -56,6 +90,19 @@ export const AgentTasks: CollectionConfig = {
       fields: [
         { name: 'key', type: 'text', required: true, label: '变量名' },
         { name: 'label', type: 'text', label: '显示名' },
+        {
+          name: 'fieldPath',
+          type: 'text',
+          label: '从绑定集合的字段读取',
+          admin: {
+            description:
+              '可选。设了之后，运行时会自动从当前编辑的文档抽这个字段的值传给 {{变量名}}。留空则使用下方"默认值"。',
+            condition: (data) => Boolean(data?.boundCollection),
+            components: {
+              Field: '@scaffold/plugin-agent/admin/FieldPathSelectField#default',
+            },
+          },
+        },
         { name: 'defaultValue', type: 'text', label: '默认值' },
         { name: 'description', type: 'textarea', label: '说明' },
       ],
@@ -71,7 +118,7 @@ export const AgentTasks: CollectionConfig = {
       ],
       admin: {
         description:
-          '当被 KB「用 Agent 抓取」调用时，会强制按 file 模式：要求 agent 把抓到的内容写到 ./workspace/output.md 并返回绝对路径',
+          'text 模式：agent 直接把答案当作 finalOutput 返回（推荐）。file 模式：系统在 systemPrompt 里要求 agent 把结果写到 ./workspace/output.md 并返回路径，runner 会自动读回内容。',
       },
     },
     {
