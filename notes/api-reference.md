@@ -1171,7 +1171,7 @@ curl -X POST 'http://localhost:3000/api/task-schedules' \
 | `skills` | relationship | | 提供给 Agent 的技能包（多个）→ `agent-skills`（hasMany） |
 | `aiModel` | relationship | ✓ | 使用的 AI 模型 → `ai-models` |
 | `maxSteps` | number | | Agent 最大执行步数（防止无限循环），默认 10 |
-| `timeoutMs` | number | | 单次运行超时时间（毫秒），默认 120000（2分钟） |
+| `timeoutMs` | number | | 单次运行超时时间（毫秒），默认 300000（5分钟）。超时后抛出 'agent execution timed out'，run status 变为 failed |
 | `enableBash` | checkbox | | 是否允许 Agent 执行 bash 命令（需谨慎启用） |
 | `lastRunAt` | date | | 最近一次运行时间 |
 | `lastRunStatus` | select | | 最近运行状态：`idle`/ `queued`/ `running`/ `success`/ `failed` |

@@ -211,6 +211,73 @@ export const processAgentTaskRun: TaskConfig<'processAgentTaskRun'> = {
     let totalTokens: number | undefined
     const steps: Array<{ type: string; content?: unknown }> = []
 
+    // === 控制台实时日志 ===
+    const logPrefix = `[agent-task #${input.agentTaskRunId}]`
+    const truncate = (s: string, n = 800) =>
+      s.length > n ? s.slice(0, n) + `…(+${s.length - n} chars)` : s
+    let liveStepNum = 0
+    const onStepFinish = (step: unknown) => {
+      try {
+        const s = step as {
+          text?: string
+          reasoning?: unknown
+          finishReason?: string
+          toolCalls?: Array<{ toolName?: string; args?: unknown; input?: unknown }>
+          toolResults?: Array<{ toolName?: string; result?: unknown; output?: unknown }>
+          usage?: { totalTokens?: number; inputTokens?: number; outputTokens?: number }
+        }
+        liveStepNum += 1
+        const reasoningText =
+          typeof s.reasoning === 'string'
+            ? s.reasoning
+            : Array.isArray(s.reasoning)
+              ? (s.reasoning as Array<{ text?: string }>)
+                  .map((r) => r?.text || '')
+                  .filter(Boolean)
+                  .join('\n')
+              : ''
+        if (reasoningText) {
+          console.log(`\n${logPrefix} step ${liveStepNum} ▸ reasoning:\n${truncate(reasoningText)}`)
+        }
+        if (s.text) {
+          console.log(`\n${logPrefix} step ${liveStepNum} ▸ text:\n${truncate(s.text)}`)
+        }
+        for (const tc of s.toolCalls || []) {
+          const args = tc.args ?? tc.input
+          const argStr = typeof args === 'string' ? args : JSON.stringify(args)
+          console.log(
+            `${logPrefix} step ${liveStepNum} ▸ tool-call ${tc.toolName}(${truncate(argStr, 500)})`,
+          )
+        }
+        for (const tr of s.toolResults || []) {
+          const out = tr.result ?? tr.output
+          const outStr = typeof out === 'string' ? out : JSON.stringify(out)
+          console.log(
+            `${logPrefix} step ${liveStepNum} ▸ tool-result ${tr.toolName}: ${truncate(outStr)}`,
+          )
+        }
+        if (s.finishReason) {
+          const u = s.usage
+          const usageStr = u
+            ? ` usage=${u.totalTokens ?? '?'}t (in=${u.inputTokens ?? '?'} out=${u.outputTokens ?? '?'})`
+            : ''
+          console.log(
+            `${logPrefix} step ${liveStepNum} ▸ finish=${s.finishReason}${usageStr}`,
+          )
+        }
+      } catch (err) {
+        // 日志失败不能影响主流程
+        console.warn(`${logPrefix} onStepFinish log error:`, (err as Error).message)
+      }
+    }
+
+    console.log(
+      `\n${logPrefix} ▶ start  task=${input.agentTaskId} model=${task.aiModel.provider}/${task.aiModel.modelId}` +
+        ` skills=[${skillNames.join(',')}] bash=${task.enableBash ? 'on' : 'off'}` +
+        ` outputMode=${task.outputMode || 'text'}${linkedKbId ? ` kb=${linkedKbId}` : ''}`,
+    )
+    console.log(`${logPrefix} ▶ prompt:\n${truncate(effectivePrompt, 1500)}\n`)
+
     try {
       // 3. 构建模型 + 工具
       const model = await buildLanguageModel(task.aiModel)
@@ -285,7 +352,8 @@ export const processAgentTaskRun: TaskConfig<'processAgentTaskRun'> = {
           tools: toolsOut,
           system: systemPrompt,
           stopWhen,
-        })
+          onStepFinish,
+        } as never)
         // 超时控制
         resultUnknown = await Promise.race([
           agent.generate({ prompt: effectivePrompt }),
@@ -305,6 +373,7 @@ export const processAgentTaskRun: TaskConfig<'processAgentTaskRun'> = {
             system: systemPrompt,
             prompt: effectivePrompt,
             stopWhen,
+            onStepFinish,
           }),
           new Promise((_, rej) =>
             setTimeout(() => rej(new Error('agent execution timed out')), task.timeoutMs || 300000),
@@ -341,8 +410,16 @@ export const processAgentTaskRun: TaskConfig<'processAgentTaskRun'> = {
           })
         }
       }
+
+      console.log(
+        `\n${logPrefix} ✓ done  steps=${stepCount} tokens=${totalTokens ?? '?'} (in=${promptTokens ?? '?'} out=${completionTokens ?? '?'})`,
+      )
+      console.log(
+        `${logPrefix} ✓ finalOutput:\n${truncate(finalOutput, 1500)}\n`,
+      )
     } catch (e) {
       const err = e as Error
+      console.error(`\n${logPrefix} ✗ failed: ${err.message || String(e)}`)
       const finishedAt = new Date()
       await payload.update({
         collection: 'agent-task-runs',
