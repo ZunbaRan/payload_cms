@@ -1,0 +1,222 @@
+/**
+ * Anthropic-inspired theme for Payload Admin Panel
+ *
+ * 关键意象：
+ *  - 暖色"燕麦/米色"底（Claude.ai 的标志性背景）
+ *  - 焦糖/赭石橙作强调色（按钮、链接、active）
+ *  - 深咖文字（不用纯黑）
+ *  - 衬线 + 几何 Sans 混排
+ *  - 边框柔和、圆角偏小、阴影几乎不要
+ */
+
+@layer payload-default {
+  :root,
+  [data-theme='light'] {
+    /* === 品牌强调色（焦糖橙）=== */
+    --theme-success-500: #2f7d5a;
+    --theme-warning-500: #b8722c;
+    --theme-error-500: #b04a3a;
+
+    /* Anthropic 招牌橙 */
+    --color-success-500: #2f7d5a;
+    --color-warning-500: #b8722c;
+    --color-error-500: #b04a3a;
+
+    /* 主色（链接、按钮、focus 边框） */
+    --theme-text: #2c1810;
+    --theme-bg: #f5f0e8;
+
+    /* === Elevation：纸张般的层次，全部偏暖 === */
+    --theme-elevation-0: #f5f0e8; /* 页面底色 */
+    --theme-elevation-50: #efe9df; /* 输入框背景 */
+    --theme-elevation-100: #e8e1d4; /* 卡片背景 */
+    --theme-elevation-150: #ddd4c2; /* hover */
+    --theme-elevation-200: #c9bfa9; /* 边框 */
+    --theme-elevation-300: #a89b80;
+    --theme-elevation-400: #87795c;
+    --theme-elevation-500: #5e533d;
+    --theme-elevation-600: #463e2c;
+    --theme-elevation-700: #332d20;
+    --theme-elevation-800: #2c1810;
+    --theme-elevation-900: #1d100a;
+    --theme-elevation-1000: #0e0805;
+
+    /* 输入框 */
+    --theme-input-bg: #fbf7f0;
+
+    /* === 字体 === */
+    --font-body:
+      'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC',
+      'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    --font-mono:
+      ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+    --font-serif:
+      'Tiempos Headline', 'Source Serif Pro', 'Georgia', 'Songti SC', serif;
+
+    /* === 圆角 / 间距 === */
+    --style-radius-s: 4px;
+    --style-radius-m: 6px;
+    --style-radius-l: 8px;
+  }
+
+  /* 暗色模式：Anthropic 风格的暖深棕，而不是冷黑 */
+  [data-theme='dark'] {
+    --theme-bg: #1d1814;
+    --theme-text: #f0e8db;
+
+    --theme-elevation-0: #1d1814;
+    --theme-elevation-50: #261f19;
+    --theme-elevation-100: #2f271f;
+    --theme-elevation-150: #3a3128;
+    --theme-elevation-200: #4a3f33;
+    --theme-elevation-300: #6b5d4d;
+    --theme-elevation-400: #8a7b66;
+    --theme-elevation-500: #a8997f;
+    --theme-elevation-600: #c4b59b;
+    --theme-elevation-700: #d8cbb3;
+    --theme-elevation-800: #e8ddc7;
+    --theme-elevation-900: #f0e8db;
+    --theme-elevation-1000: #faf5ec;
+
+    --theme-input-bg: #2a221b;
+  }
+
+  /* ============================================================
+   * 微调具体组件
+   * ============================================================ */
+
+  body {
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  /* 标题用衬线，让"读起来像文档" */
+  h1,
+  h2,
+  h3,
+  .step-nav h1,
+  .doc-header h1,
+  .dashboard__label,
+  .render-title {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+
+  /* 左侧导航：纸张感 */
+  .nav {
+    background: var(--theme-elevation-50);
+    border-right: 1px solid var(--theme-elevation-150);
+  }
+
+  .nav__link:hover {
+    background: var(--theme-elevation-100);
+  }
+
+  .nav__link--active,
+  .nav__link[aria-current='page'] {
+    background: var(--theme-elevation-150);
+    color: var(--color-warning-500);
+    font-weight: 500;
+  }
+
+  /* 顶部 App 头 */
+  .app-header,
+  .doc-header {
+    background: var(--theme-elevation-0);
+    border-bottom: 1px solid var(--theme-elevation-150);
+  }
+
+  /* 主按钮 = 焦糖橙 */
+  .btn--style-primary,
+  .btn--icon-style-without-border.btn--style-primary {
+    background: var(--color-warning-500);
+    color: #fff;
+    border-color: var(--color-warning-500);
+  }
+  .btn--style-primary:hover {
+    background: #9c6122;
+    border-color: #9c6122;
+  }
+
+  /* 次按钮 = 米色描边 */
+  .btn--style-secondary {
+    background: var(--theme-elevation-50);
+    border-color: var(--theme-elevation-200);
+    color: var(--theme-text);
+  }
+  .btn--style-secondary:hover {
+    background: var(--theme-elevation-100);
+  }
+
+  /* 输入框：纸张感、低对比边框 */
+  .field-type input[type='text'],
+  .field-type input[type='email'],
+  .field-type input[type='number'],
+  .field-type input[type='password'],
+  .field-type textarea,
+  .rs__control {
+    background: var(--theme-input-bg);
+    border: 1px solid var(--theme-elevation-200);
+    border-radius: var(--style-radius-m);
+    box-shadow: none;
+  }
+  .field-type input:focus,
+  .field-type textarea:focus,
+  .rs__control--is-focused {
+    border-color: var(--color-warning-500) !important;
+    box-shadow: 0 0 0 3px rgba(184, 114, 44, 0.15) !important;
+  }
+
+  /* 表格：保留纸张感，去掉强分割线 */
+  .table table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .table thead {
+    background: var(--theme-elevation-50);
+  }
+  .table thead th {
+    font-family: var(--font-body);
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--theme-elevation-600);
+    border-bottom: 1px solid var(--theme-elevation-200);
+  }
+  .table tbody tr {
+    border-bottom: 1px solid var(--theme-elevation-100);
+  }
+  .table tbody tr:hover {
+    background: var(--theme-elevation-50);
+  }
+
+  /* 卡片 */
+  .dashboard__group,
+  .card,
+  .doc-controls,
+  .gutter {
+    border-radius: var(--style-radius-l);
+  }
+
+  /* 链接 */
+  a {
+    color: var(--color-warning-500);
+  }
+  a:hover {
+    color: #9c6122;
+  }
+
+  /* Pill / badge：去掉粗描边 */
+  .pill {
+    border-radius: 999px;
+    border: 1px solid var(--theme-elevation-200);
+    background: var(--theme-elevation-50);
+  }
+
+  /* 阴影：几乎全部去掉，换成微细线条 */
+  .doc-tabs,
+  .gutter,
+  .card {
+    box-shadow: none;
+  }
+}
