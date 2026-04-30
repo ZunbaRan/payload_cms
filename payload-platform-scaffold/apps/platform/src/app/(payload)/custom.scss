@@ -24,14 +24,14 @@
 
     /* 主色（链接、按钮、focus 边框） */
     --theme-text: #2c1810;
-    --theme-bg: #f5f0e8;
+    --theme-bg: #faf8f5;
 
     /* === Elevation：纸张般的层次，全部偏暖 === */
-    --theme-elevation-0: #f5f0e8; /* 页面底色 */
-    --theme-elevation-50: #efe9df; /* 输入框背景 */
-    --theme-elevation-100: #e8e1d4; /* 卡片背景 */
-    --theme-elevation-150: #ddd4c2; /* hover */
-    --theme-elevation-200: #c9bfa9; /* 边框 */
+    --theme-elevation-0: #faf8f5; /* 页面底色 */
+    --theme-elevation-50: #f5f0e8; /* 输入框背景 */
+    --theme-elevation-100: #ede7dc; /* 卡片背景 */
+    --theme-elevation-150: #e2d9cb; /* hover */
+    --theme-elevation-200: #ccc3ae; /* 边框 */
     --theme-elevation-300: #a89b80;
     --theme-elevation-400: #87795c;
     --theme-elevation-500: #5e533d;
@@ -42,7 +42,7 @@
     --theme-elevation-1000: #0e0805;
 
     /* 输入框 */
-    --theme-input-bg: #fbf7f0;
+    --theme-input-bg: #ffffff;
 
     /* === 字体 === */
     --font-body:
